@@ -13,9 +13,10 @@ struct vertex
 {
   glm::vec2 pos;
   glm::vec3 color;
+  glm::vec2 tex_coord;
 
   static VkVertexInputBindingDescription binding_description();
-  static std::array<VkVertexInputAttributeDescription, 2>
+  static std::array<VkVertexInputAttributeDescription, 3>
   attribute_descriptions();
 };
 }  // namespace vktut::shaders

@@ -11,10 +11,10 @@ VkVertexInputBindingDescription vktut::shaders::vertex::binding_description()
   return binding_description;
 }
 
-std::array<VkVertexInputAttributeDescription, 2>
+std::array<VkVertexInputAttributeDescription, 3>
 vktut::shaders::vertex::attribute_descriptions()
 {
-  std::array<VkVertexInputAttributeDescription, 2> attribute_descriptions = {
+  std::array attribute_descriptions = {
       VkVertexInputAttributeDescription {
           .location = 0,
           .binding = 0,
@@ -26,6 +26,12 @@ vktut::shaders::vertex::attribute_descriptions()
           .binding = 0,
           .format = VK_FORMAT_R32G32B32_SFLOAT,
           .offset = offsetof(vertex, color),
+      },
+      VkVertexInputAttributeDescription {
+          .location = 2,
+          .binding = 0,
+          .format = VK_FORMAT_R32G32_SFLOAT,
+          .offset = offsetof(vertex, tex_coord),
       },
   };
 

@@ -10,6 +10,7 @@
 
 #include <vktut/shaders/vertex.hxx>
 #include <vktut/vulkan/buffer_and_memory.hxx>
+#include <vktut/vulkan/image_and_memory.hxx>
 #include <vktut/vulkan/instance.hxx>
 #include <vktut/vulkan/swap_chain_support_details.hxx>
 
@@ -55,6 +56,10 @@ private:
   std::vector<VkDeviceMemory> m_uniform_buffers_memory;
   VkDescriptorPool m_descriptor_pool;
   std::vector<VkDescriptorSet> m_descriptor_sets;
+  VkImage m_texture_image;
+  VkDeviceMemory m_texture_image_memory;
+  VkImageView m_texture_image_view;
+  VkSampler m_texture_sampler;
 
   static constexpr std::uint32_t width = 800;
   static constexpr std::uint32_t height = 600;
@@ -67,10 +72,10 @@ private:
   static constexpr int max_frames_in_flight = 2;
 
   static constexpr std::array vertices = {
-      shaders::vertex {{-0.5, -0.5}, {1, 0, 0}},
-      shaders::vertex {{0.5, -0.5}, {0, 1, 0}},
-      shaders::vertex {{0.5, 0.5}, {0, 0, 1}},
-      shaders::vertex {{-0.5, 0.5}, {1, 1, 1}},
+      shaders::vertex {{-0.5, -0.5}, {1, 0, 0}, {0, 0}},
+      shaders::vertex {{0.5, -0.5}, {0, 1, 0}, {1, 0}},
+      shaders::vertex {{0.5, 0.5}, {0, 0, 1}, {1, 1}},
+      shaders::vertex {{-0.5, 0.5}, {1, 1, 1}, {0, 1}},
   };
   static constexpr std::array indices = {
       std::uint16_t {0},
@@ -113,10 +118,39 @@ private:
   void create_uniform_buffers();
   void create_descriptor_pool();
   void create_descriptor_sets();
+  void create_texture_image();
+  void create_texture_image_view();
+  void create_texture_sampler();
+  VkImageView create_image_view(VkImage image, VkFormat format);
+  vulkan::image_and_memory create_image(std::uint32_t width,
+                                        std::uint32_t height,
+                                        VkFormat format,
+                                        VkImageTiling tiling,
+                                        VkImageUsageFlags usage,
+                                        VkMemoryPropertyFlags properties);
   vulkan::buffer_and_memory create_buffer(VkDeviceSize size,
                                           VkBufferUsageFlags usage,
                                           VkMemoryPropertyFlags properties);
   VkShaderModule create_shader_module(const std::vector<char>& code);
+  VkCommandBuffer begin_single_time_commands(VkCommandPool command_pool);
+  void copy_buffer(VkBuffer src_buffer,
+                   VkBuffer dst_buffer,
+                   VkDeviceSize size,
+                   VkCommandPool command_pool,
+                   VkQueue queue);
+  void end_single_time_commands(VkCommandBuffer command_buffer,
+                                VkCommandPool command_pool,
+                                VkQueue queue);
+  void transition_image_layout(VkImage image,
+                               VkFormat format,
+                               VkImageLayout old_layout,
+                               VkImageLayout new_layout,
+                               VkCommandPool command_pool,
+                               VkQueue queue);
+  void copy_buffer_to_image(VkBuffer buffer,
+                            VkImage image,
+                            std::uint32_t width,
+                            std::uint32_t height);
   void setup_debug_messenger();
   void pick_physical_device();
   void create_logical_device();
