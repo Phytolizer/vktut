@@ -1,5 +1,11 @@
 #include "vktut/shaders/vertex.hxx"
 
+bool vktut::shaders::vertex::operator==(const vertex& other) const
+{
+  return pos == other.pos && color == other.color
+      && tex_coord == other.tex_coord;
+}
+
 VkVertexInputBindingDescription vktut::shaders::vertex::binding_description()
 {
   VkVertexInputBindingDescription binding_description = {
@@ -36,4 +42,11 @@ vktut::shaders::vertex::attribute_descriptions()
   };
 
   return attribute_descriptions;
+}
+
+std::size_t std::hash<vktut::shaders::vertex>::operator()(
+    const vktut::shaders::vertex& v) const
+{
+  return ((hash<glm::vec3>()(v.pos) ^ (hash<glm::vec3>()(v.color) << 1)) >> 1)
+      ^ (hash<glm::vec2>()(v.tex_coord) << 1);
 }

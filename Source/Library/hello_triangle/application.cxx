@@ -3,6 +3,7 @@
 #include <chrono>
 #include <limits>
 #include <map>
+#include <unordered_map>
 #include <unordered_set>
 #include <vector>
 
@@ -11,7 +12,7 @@
 #include <GLFW/glfw3.h>
 #include <config.hpp>
 #include <stb_image.h>
-#include <vulkan/vulkan_core.h>
+#include <tiny_obj_loader.h>
 
 #define GLM_FORCE_RADIANS
 #define GLM_FORCE_DEFAULT_ALIGNED_GENTYPES
@@ -103,6 +104,7 @@ void vktut::hello_triangle::application::init_vulkan()
   create_texture_image();
   create_texture_image_view();
   create_texture_sampler();
+  load_model();
   create_vertex_buffer();
   create_index_buffer();
   create_uniform_buffers();
@@ -280,6 +282,57 @@ void vktut::hello_triangle::application::cleanup()
 
   glfwDestroyWindow(m_window);
   glfwTerminate();
+}
+
+void vktut::hello_triangle::application::load_model()
+{
+  tinyobj::ObjReader reader;
+  tinyobj::ObjReaderConfig config;
+  config.triangulate = true;
+  if (!reader.ParseFromFile(std::string {model_path}, config)) {
+    throw std::runtime_error {reader.Warning() + reader.Error()};
+  }
+  const auto& attrib = reader.GetAttrib();
+  const auto& shapes = reader.GetShapes();
+  const auto& materials = reader.GetMaterials();
+
+  std::unordered_map<shaders::vertex, std::uint32_t> unique_vertices;
+
+  for (const auto& shape : shapes) {
+    for (const auto& index : shape.mesh.indices) {
+      auto vert = shaders::vertex {
+          .pos =
+              {
+                  attrib
+                      .vertices[3 * static_cast<std::size_t>(index.vertex_index)
+                                + 0],
+                  attrib
+                      .vertices[3 * static_cast<std::size_t>(index.vertex_index)
+                                + 1],
+                  attrib
+                      .vertices[3 * static_cast<std::size_t>(index.vertex_index)
+                                + 2],
+              },
+          .color = {1, 1, 1},
+          .tex_coord =
+              {
+                  attrib.texcoords
+                      [2 * static_cast<std::size_t>(index.texcoord_index) + 0],
+                  1.0F
+                      - attrib.texcoords
+                            [2 * static_cast<std::size_t>(index.texcoord_index)
+                             + 1],
+              },
+      };
+
+      if (unique_vertices.count(vert) == 0) {
+        unique_vertices.emplace(vert,
+                                static_cast<std::uint32_t>(m_vertices.size()));
+        m_vertices.emplace_back(vert);
+      }
+      m_indices.push_back(unique_vertices[vert]);
+    }
+  }
 }
 
 void vktut::hello_triangle::application::create_descriptor_set_layout()
@@ -560,7 +613,7 @@ void vktut::hello_triangle::application::create_command_buffers()
     vkCmdBindVertexBuffers(
         m_command_buffers[i], 0, 1, vertex_buffers.data(), offsets.data());
     vkCmdBindIndexBuffer(
-        m_command_buffers[i], m_index_buffer, 0, VK_INDEX_TYPE_UINT16);
+        m_command_buffers[i], m_index_buffer, 0, VK_INDEX_TYPE_UINT32);
     vkCmdBindDescriptorSets(m_command_buffers[i],
                             VK_PIPELINE_BIND_POINT_GRAPHICS,
                             m_pipeline_layout,
@@ -569,7 +622,7 @@ void vktut::hello_triangle::application::create_command_buffers()
                             &m_descriptor_sets[i],
                             0,
                             nullptr);
-    vkCmdDrawIndexed(m_command_buffers[i], indices.size(), 1, 0, 0, 0);
+    vkCmdDrawIndexed(m_command_buffers[i], m_indices.size(), 1, 0, 0, 0);
     vkCmdEndRenderPass(m_command_buffers[i]);
     if (vkEndCommandBuffer(m_command_buffers[i]) != VK_SUCCESS) {
       throw std::runtime_error {"failed to record command buffer!"};
@@ -772,7 +825,7 @@ void vktut::hello_triangle::application::update_uniform_buffer(
       .model = glm::rotate(glm::mat4 {1.0F},
                            time * glm::radians(90.0F),
                            glm::vec3 {0.0F, 0.0F, 1.0F}),
-      .view = glm::lookAt(glm::vec3 {2.0F, 2.0F, 2.0F},
+      .view = glm::lookAt(glm::vec3 {30.0F, 30.0F, 30.0F},
                           glm::vec3 {0.0F, 0.0F, 0.0F},
                           glm::vec3 {0.0F, 0.0F, 1.0F}),
       .proj =
@@ -780,7 +833,7 @@ void vktut::hello_triangle::application::update_uniform_buffer(
                            static_cast<float>(m_swap_chain_extent.width)
                                / static_cast<float>(m_swap_chain_extent.height),
                            0.1F,
-                           10.0F),
+                           1000.0F),
   };
 
   // flip y axis, vulkan has a sensible y axis unlike ogl
@@ -1087,7 +1140,8 @@ void vktut::hello_triangle::application::create_graphics_pipeline()
 
 void vktut::hello_triangle::application::create_vertex_buffer()
 {
-  auto buffer_size = sizeof(decltype(vertices)::value_type) * vertices.size();
+  auto buffer_size =
+      sizeof(decltype(m_vertices)::value_type) * m_vertices.size();
   auto staging_buffer_and_memory =
       create_buffer(buffer_size,
                     VK_BUFFER_USAGE_TRANSFER_SRC_BIT,
@@ -1097,8 +1151,9 @@ void vktut::hello_triangle::application::create_vertex_buffer()
   VkDeviceMemory staging_memory = staging_buffer_and_memory.memory;
   void* data = nullptr;
   vkMapMemory(m_device, staging_memory, 0, buffer_size, 0, &data);
-  std::copy(
-      vertices.begin(), vertices.end(), static_cast<shaders::vertex*>(data));
+  std::copy(m_vertices.begin(),
+            m_vertices.end(),
+            static_cast<shaders::vertex*>(data));
   vkUnmapMemory(m_device, staging_memory);
 
   auto vertex_buffer_and_memory = create_buffer(
@@ -1121,7 +1176,7 @@ void vktut::hello_triangle::application::create_vertex_buffer()
 void vktut::hello_triangle::application::create_index_buffer()
 {
   VkDeviceSize buffer_size =
-      sizeof(decltype(indices)::value_type) * indices.size();
+      sizeof(decltype(m_indices)::value_type) * m_indices.size();
 
   auto staging = create_buffer(buffer_size,
                                VK_BUFFER_USAGE_TRANSFER_SRC_BIT,
@@ -1130,7 +1185,9 @@ void vktut::hello_triangle::application::create_index_buffer()
 
   void* data = nullptr;
   vkMapMemory(m_device, staging.memory, 0, buffer_size, 0, &data);
-  std::copy(indices.begin(), indices.end(), static_cast<std::uint16_t*>(data));
+  std::copy(m_indices.begin(),
+            m_indices.end(),
+            static_cast<decltype(m_indices)::value_type*>(data));
   vkUnmapMemory(m_device, staging.memory);
 
   auto index = create_buffer(
@@ -1268,12 +1325,8 @@ void vktut::hello_triangle::application::create_texture_image()
   int tex_width = 0;
   int tex_height = 0;
   int tex_channels = 0;
-  stbi_uc* pixels =
-      stbi_load(PROJECT_SOURCE_DIR "/Resources/Textures/house.png",
-                &tex_width,
-                &tex_height,
-                &tex_channels,
-                STBI_rgb_alpha);
+  stbi_uc* pixels = stbi_load(
+      texture_paths[0], &tex_width, &tex_height, &tex_channels, STBI_rgb_alpha);
   if (pixels == nullptr) {
     throw std::runtime_error {"failed to load texture image!"};
   }

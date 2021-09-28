@@ -7,6 +7,7 @@
 
 #define GLFW_INCLUDE_VULKAN
 #include <GLFW/glfw3.h>
+#include <config.hpp>
 
 #include <vktut/shaders/vertex.hxx>
 #include <vktut/vulkan/buffer_and_memory.hxx>
@@ -48,6 +49,8 @@ private:
   std::vector<VkFence> m_images_in_flight;
   std::size_t m_current_frame = 0;
   bool m_framebuffer_resized = false;
+  std::vector<shaders::vertex> m_vertices;
+  std::vector<std::uint32_t> m_indices;
   VkBuffer m_vertex_buffer;
   VkDeviceMemory m_vertex_buffer_memory;
   VkBuffer m_index_buffer;
@@ -66,6 +69,12 @@ private:
 
   static constexpr std::uint32_t width = 800;
   static constexpr std::uint32_t height = 600;
+  static constexpr std::string_view model_path =
+      PROJECT_SOURCE_DIR "/Resources/Models/sculpt.obj";
+  static constexpr std::array texture_paths = {
+      PROJECT_SOURCE_DIR "/Resources/Textures/tex_0.jpg",
+      PROJECT_SOURCE_DIR "/Resources/Textures/tex_1.jpg",
+  };
   static constexpr std::array validation_layers = {
       "VK_LAYER_KHRONOS_validation",
   };
@@ -73,32 +82,6 @@ private:
       VK_KHR_SWAPCHAIN_EXTENSION_NAME,
   };
   static constexpr int max_frames_in_flight = 2;
-
-  static constexpr std::array vertices = {
-      shaders::vertex {{-0.5, -0.5, 0}, {1, 0, 0}, {0, 0}},
-      shaders::vertex {{0.5, -0.5, 0}, {0, 1, 0}, {1, 0}},
-      shaders::vertex {{0.5, 0.5, 0}, {0, 0, 1}, {1, 1}},
-      shaders::vertex {{-0.5, 0.5, 0}, {1, 1, 1}, {0, 1}},
-
-      shaders::vertex {{-0.5, -0.5, -0.5}, {1, 0, 0}, {0, 0}},
-      shaders::vertex {{0.5, -0.5, -0.5}, {0, 1, 0}, {1, 0}},
-      shaders::vertex {{0.5, 0.5, -0.5}, {0, 0, 1}, {1, 1}},
-      shaders::vertex {{-0.5, 0.5, -0.5}, {1, 1, 1}, {0, 1}},
-  };
-  static constexpr std::array indices = {
-      std::uint16_t {0},
-      std::uint16_t {1},
-      std::uint16_t {2},
-      std::uint16_t {2},
-      std::uint16_t {3},
-      std::uint16_t {0},
-      std::uint16_t {4},
-      std::uint16_t {5},
-      std::uint16_t {6},
-      std::uint16_t {6},
-      std::uint16_t {7},
-      std::uint16_t {4},
-  };
 
 #ifdef NDEBUG
   static constexpr bool validation_layers_enabled = false;
@@ -125,6 +108,7 @@ private:
   bool check_validation_layers_support();
   void main_loop();
   void cleanup();
+  void load_model();
   void create_descriptor_set_layout();
   void create_graphics_pipeline();
   void create_vertex_buffer();
