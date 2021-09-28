@@ -60,6 +60,9 @@ private:
   VkDeviceMemory m_texture_image_memory;
   VkImageView m_texture_image_view;
   VkSampler m_texture_sampler;
+  VkImage m_depth_image;
+  VkDeviceMemory m_depth_image_memory;
+  VkImageView m_depth_image_view;
 
   static constexpr std::uint32_t width = 800;
   static constexpr std::uint32_t height = 600;
@@ -72,10 +75,15 @@ private:
   static constexpr int max_frames_in_flight = 2;
 
   static constexpr std::array vertices = {
-      shaders::vertex {{-0.5, -0.5}, {1, 0, 0}, {0, 0}},
-      shaders::vertex {{0.5, -0.5}, {0, 1, 0}, {1, 0}},
-      shaders::vertex {{0.5, 0.5}, {0, 0, 1}, {1, 1}},
-      shaders::vertex {{-0.5, 0.5}, {1, 1, 1}, {0, 1}},
+      shaders::vertex {{-0.5, -0.5, 0}, {1, 0, 0}, {0, 0}},
+      shaders::vertex {{0.5, -0.5, 0}, {0, 1, 0}, {1, 0}},
+      shaders::vertex {{0.5, 0.5, 0}, {0, 0, 1}, {1, 1}},
+      shaders::vertex {{-0.5, 0.5, 0}, {1, 1, 1}, {0, 1}},
+
+      shaders::vertex {{-0.5, -0.5, -0.5}, {1, 0, 0}, {0, 0}},
+      shaders::vertex {{0.5, -0.5, -0.5}, {0, 1, 0}, {1, 0}},
+      shaders::vertex {{0.5, 0.5, -0.5}, {0, 0, 1}, {1, 1}},
+      shaders::vertex {{-0.5, 0.5, -0.5}, {1, 1, 1}, {0, 1}},
   };
   static constexpr std::array indices = {
       std::uint16_t {0},
@@ -84,6 +92,12 @@ private:
       std::uint16_t {2},
       std::uint16_t {3},
       std::uint16_t {0},
+      std::uint16_t {4},
+      std::uint16_t {5},
+      std::uint16_t {6},
+      std::uint16_t {6},
+      std::uint16_t {7},
+      std::uint16_t {4},
   };
 
 #ifdef NDEBUG
@@ -121,7 +135,9 @@ private:
   void create_texture_image();
   void create_texture_image_view();
   void create_texture_sampler();
-  VkImageView create_image_view(VkImage image, VkFormat format);
+  void create_depth_resources();
+  VkImageView create_image_view(
+    VkImage image, VkFormat format, VkImageAspectFlags aspect_flags);
   vulkan::image_and_memory create_image(std::uint32_t width,
                                         std::uint32_t height,
                                         VkFormat format,
@@ -169,6 +185,11 @@ private:
   VkExtent2D choose_swap_extent(const VkSurfaceCapabilitiesKHR& capabilities);
   std::uint32_t find_memory_type(std::uint32_t type_filter,
                                  VkMemoryPropertyFlags properties);
+  VkFormat find_supported_format(const std::vector<VkFormat>& candidates,
+                                 VkImageTiling tiling,
+                                 VkFormatFeatureFlags features);
+  VkFormat find_depth_format();
+  static bool has_stencil_component(VkFormat format);
   static VkPresentModeKHR choose_swap_present_mode(
       const std::vector<VkPresentModeKHR>& available_present_modes);
   static VkSurfaceFormatKHR choose_swap_surface_format(
