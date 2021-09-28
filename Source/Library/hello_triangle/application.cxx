@@ -1378,8 +1378,8 @@ void vktut::hello_triangle::application::create_depth_resources()
                           depth_format,
                           VK_IMAGE_LAYOUT_UNDEFINED,
                           VK_IMAGE_LAYOUT_DEPTH_STENCIL_ATTACHMENT_OPTIMAL,
-                          m_transfer_command_pool,
-                          m_transfer_queue);
+                          m_command_pool,
+                          m_graphics_queue);
 }
 
 VkImageView vktut::hello_triangle::application::create_image_view(
