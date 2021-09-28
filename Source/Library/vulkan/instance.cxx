@@ -12,7 +12,8 @@ vktut::vulkan::instance::~instance()
   vkDestroyInstance(m_handle, nullptr);
 }
 
-VkInstance vktut::vulkan::instance::get() {
+VkInstance vktut::vulkan::instance::get()
+{
   return m_handle;
 }
 

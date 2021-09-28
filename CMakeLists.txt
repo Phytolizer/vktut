@@ -7,6 +7,11 @@ project(
   DESCRIPTION "Learning Vulkan from the official tutorial"
 )
 
+set(CMAKE_EXPORT_COMPILE_COMMANDS ON)
+
+include(cmake/cppcheck.cmake)
+include(cmake/clang_format.cmake)
+
 find_package(Vulkan REQUIRED)
 find_package(glfw3 REQUIRED)
 

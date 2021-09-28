@@ -8,9 +8,7 @@ VkResult vktut::vulkan::debug::create_debug_utils_messenger_ext(
 {
   // NOLINTNEXTLINE(cppcoreguidelines-pro-type-reinterpret-cast)
   auto func = reinterpret_cast<PFN_vkCreateDebugUtilsMessengerEXT>(
-      vkGetInstanceProcAddr(
-          instance->get(),
-          "vkCreateDebugUtilsMessengerEXT"));
+      vkGetInstanceProcAddr(instance->get(), "vkCreateDebugUtilsMessengerEXT"));
   if (func != nullptr) {
     return func(instance->get(), create_info, allocator, debug_messenger);
   }
@@ -24,9 +22,8 @@ void vktut::vulkan::debug::destroy_debug_utils_messenger_ext(
 {
   // NOLINTNEXTLINE(cppcoreguidelines-pro-type-reinterpret-cast)
   auto func = reinterpret_cast<PFN_vkDestroyDebugUtilsMessengerEXT>(
-      vkGetInstanceProcAddr(
-          instance->get(),
-          "vkDestroyDebugUtilsMessengerEXT"));
+      vkGetInstanceProcAddr(instance->get(),
+                            "vkDestroyDebugUtilsMessengerEXT"));
   if (func != nullptr) {
     func(instance->get(), debug_messenger, allocator);
   }

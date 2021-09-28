@@ -309,14 +309,18 @@ void vktut::hello_triangle::application::create_logical_device()
   };
   queue_create_infos.reserve(unique_queue_families.size());
   float queue_priority = 1;
-  for (std::uint32_t queue_family : unique_queue_families) {
-    queue_create_infos.emplace_back(VkDeviceQueueCreateInfo {
-        .sType = VK_STRUCTURE_TYPE_DEVICE_QUEUE_CREATE_INFO,
-        .queueFamilyIndex = queue_family,
-        .queueCount = 1,
-        .pQueuePriorities = &queue_priority,
-    });
-  }
+  std::transform(unique_queue_families.begin(),
+                 unique_queue_families.end(),
+                 std::back_inserter(queue_create_infos),
+                 [&queue_priority](std::uint32_t queue_family)
+                 {
+                   return VkDeviceQueueCreateInfo {
+                       .sType = VK_STRUCTURE_TYPE_DEVICE_QUEUE_CREATE_INFO,
+                       .queueFamilyIndex = queue_family,
+                       .queueCount = 1,
+                       .pQueuePriorities = &queue_priority,
+                   };
+                 });
 
   VkPhysicalDeviceFeatures device_features = {};
 
@@ -865,6 +869,8 @@ void vktut::hello_triangle::application::create_graphics_pipeline()
       .dynamicStateCount = 2,
       .pDynamicStates = dynamic_states.data(),
   };
+  // explicitly unused to suppress warning, read comment above
+  (void)dynamic_state;
 
   VkPipelineLayoutCreateInfo pipeline_layout_info = {
       .sType = VK_STRUCTURE_TYPE_PIPELINE_LAYOUT_CREATE_INFO,
@@ -1120,15 +1126,19 @@ VkSurfaceFormatKHR
 vktut::hello_triangle::application::choose_swap_surface_format(
     const std::vector<VkSurfaceFormatKHR>& available_formats)
 {
-  for (const auto& available_format : available_formats) {
-    if (available_format.format == VK_FORMAT_B8G8R8A8_SRGB
-        && available_format.colorSpace == VK_COLOR_SPACE_SRGB_NONLINEAR_KHR)
-    {
-      return available_format;
-    }
-  }
+  auto format = std::find_if(
+      available_formats.begin(),
+      available_formats.end(),
+      [](const auto& available_format)
+      {
+        return available_format.format == VK_FORMAT_B8G8R8A8_SRGB
+            && available_format.colorSpace == VK_COLOR_SPACE_SRGB_NONLINEAR_KHR;
+      });
 
-  return available_formats[0];
+  if (format == available_formats.end()) {
+    return available_formats[0];
+  }
+  return *format;
 }
 
 bool vktut::hello_triangle::application::check_device_extensions_support(
