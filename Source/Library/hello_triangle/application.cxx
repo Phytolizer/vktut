@@ -54,6 +54,7 @@ vktut::hello_triangle::application::application()
     , m_index_buffer(nullptr)
     , m_index_buffer_memory(nullptr)
     , m_descriptor_pool(nullptr)
+    , m_mip_levels(0)
     , m_texture_image(nullptr)
     , m_texture_image_memory(nullptr)
     , m_texture_image_view(nullptr)
@@ -119,8 +120,10 @@ void vktut::hello_triangle::application::create_image_views()
   m_swap_chain_image_views.resize(m_swap_chain_images.size());
   for (size_t i = 0; i < m_swap_chain_images.size(); ++i) {
     const auto& swap_chain_image = m_swap_chain_images[i];
-    m_swap_chain_image_views[i] = create_image_view(
-        swap_chain_image, m_swap_chain_image_format, VK_IMAGE_ASPECT_COLOR_BIT);
+    m_swap_chain_image_views[i] = create_image_view(swap_chain_image,
+                                                    m_swap_chain_image_format,
+                                                    VK_IMAGE_ASPECT_COLOR_BIT,
+                                                    1);
   }
 }
 
@@ -1332,6 +1335,9 @@ void vktut::hello_triangle::application::create_texture_image()
   }
   auto image_size = static_cast<VkDeviceSize>(tex_width)
       * static_cast<VkDeviceSize>(tex_height) * 4;
+  m_mip_levels = static_cast<std::uint32_t>(
+                     std::floor(std::log2(std::max(tex_width, tex_height))))
+      + 1;
 
   auto staging = create_buffer(image_size,
                                VK_BUFFER_USAGE_TRANSFER_SRC_BIT,
@@ -1346,13 +1352,15 @@ void vktut::hello_triangle::application::create_texture_image()
 
   stbi_image_free(pixels);
 
-  auto image =
-      create_image(tex_width,
-                   tex_height,
-                   VK_FORMAT_R8G8B8A8_SRGB,
-                   VK_IMAGE_TILING_OPTIMAL,
-                   VK_IMAGE_USAGE_TRANSFER_DST_BIT | VK_IMAGE_USAGE_SAMPLED_BIT,
-                   VK_MEMORY_PROPERTY_DEVICE_LOCAL_BIT);
+  auto image = create_image(tex_width,
+                            tex_height,
+                            m_mip_levels,
+                            VK_FORMAT_R8G8B8A8_SRGB,
+                            VK_IMAGE_TILING_OPTIMAL,
+                            VK_IMAGE_USAGE_TRANSFER_SRC_BIT
+                                | VK_IMAGE_USAGE_TRANSFER_DST_BIT
+                                | VK_IMAGE_USAGE_SAMPLED_BIT,
+                            VK_MEMORY_PROPERTY_DEVICE_LOCAL_BIT);
   m_texture_image = image.image;
   m_texture_image_memory = image.memory;
 
@@ -1360,18 +1368,18 @@ void vktut::hello_triangle::application::create_texture_image()
                           VK_FORMAT_R8G8B8A8_SRGB,
                           VK_IMAGE_LAYOUT_UNDEFINED,
                           VK_IMAGE_LAYOUT_TRANSFER_DST_OPTIMAL,
+                          m_mip_levels,
                           m_transfer_command_pool,
                           m_transfer_queue);
   copy_buffer_to_image(staging.buffer,
                        m_texture_image,
                        static_cast<std::uint32_t>(tex_width),
                        static_cast<std::uint32_t>(tex_height));
-  transition_image_layout(m_texture_image,
-                          VK_FORMAT_R8G8B8A8_SRGB,
-                          VK_IMAGE_LAYOUT_TRANSFER_DST_OPTIMAL,
-                          VK_IMAGE_LAYOUT_SHADER_READ_ONLY_OPTIMAL,
-                          m_command_pool,
-                          m_graphics_queue);
+  generate_mipmaps(m_texture_image,
+                   VK_FORMAT_R8G8B8A8_SRGB,
+                   tex_width,
+                   tex_height,
+                   m_mip_levels);
 
   vkDestroyBuffer(m_device, staging.buffer, nullptr);
   vkFreeMemory(m_device, staging.memory, nullptr);
@@ -1379,8 +1387,10 @@ void vktut::hello_triangle::application::create_texture_image()
 
 void vktut::hello_triangle::application::create_texture_image_view()
 {
-  m_texture_image_view = create_image_view(
-      m_texture_image, VK_FORMAT_R8G8B8A8_SRGB, VK_IMAGE_ASPECT_COLOR_BIT);
+  m_texture_image_view = create_image_view(m_texture_image,
+                                           VK_FORMAT_R8G8B8A8_SRGB,
+                                           VK_IMAGE_ASPECT_COLOR_BIT,
+                                           m_mip_levels);
 }
 
 void vktut::hello_triangle::application::create_texture_sampler()
@@ -1401,7 +1411,7 @@ void vktut::hello_triangle::application::create_texture_sampler()
       .compareEnable = VK_FALSE,
       .compareOp = VK_COMPARE_OP_ALWAYS,
       .minLod = 0.0F,
-      .maxLod = 0.0F,
+      .maxLod = static_cast<float>(m_mip_levels),
       .borderColor = VK_BORDER_COLOR_INT_OPAQUE_BLACK,
       .unnormalizedCoordinates = VK_FALSE,
   };
@@ -1418,25 +1428,30 @@ void vktut::hello_triangle::application::create_depth_resources()
   VkFormat depth_format = find_depth_format();
   auto depth = create_image(m_swap_chain_extent.width,
                             m_swap_chain_extent.height,
+                            1,
                             depth_format,
                             VK_IMAGE_TILING_OPTIMAL,
                             VK_IMAGE_USAGE_DEPTH_STENCIL_ATTACHMENT_BIT,
                             VK_MEMORY_PROPERTY_DEVICE_LOCAL_BIT);
   m_depth_image = depth.image;
   m_depth_image_memory = depth.memory;
-  m_depth_image_view =
-      create_image_view(m_depth_image, depth_format, VK_IMAGE_ASPECT_DEPTH_BIT);
+  m_depth_image_view = create_image_view(
+      m_depth_image, depth_format, VK_IMAGE_ASPECT_DEPTH_BIT, 1);
 
   transition_image_layout(m_depth_image,
                           depth_format,
                           VK_IMAGE_LAYOUT_UNDEFINED,
                           VK_IMAGE_LAYOUT_DEPTH_STENCIL_ATTACHMENT_OPTIMAL,
+                          1,
                           m_command_pool,
                           m_graphics_queue);
 }
 
 VkImageView vktut::hello_triangle::application::create_image_view(
-    VkImage image, VkFormat format, VkImageAspectFlags aspect_flags)
+    VkImage image,
+    VkFormat format,
+    VkImageAspectFlags aspect_flags,
+    std::uint32_t mip_levels)
 {
   VkImageViewCreateInfo view_info = {
       .sType = VK_STRUCTURE_TYPE_IMAGE_VIEW_CREATE_INFO,
@@ -1454,7 +1469,7 @@ VkImageView vktut::hello_triangle::application::create_image_view(
           {
               .aspectMask = aspect_flags,
               .baseMipLevel = 0,
-              .levelCount = 1,
+              .levelCount = mip_levels,
               .baseArrayLayer = 0,
               .layerCount = 1,
           },
@@ -1473,6 +1488,7 @@ vktut::vulkan::image_and_memory
 vktut::hello_triangle::application::create_image(
     std::uint32_t width,
     std::uint32_t height,
+    std::uint32_t mip_levels,
     VkFormat format,
     VkImageTiling tiling,
     VkImageUsageFlags usage,
@@ -1489,7 +1505,7 @@ vktut::hello_triangle::application::create_image(
               .height = static_cast<std::uint32_t>(height),
               .depth = 1,
           },
-      .mipLevels = 1,
+      .mipLevels = mip_levels,
       .arrayLayers = 1,
       .samples = VK_SAMPLE_COUNT_1_BIT,
       .tiling = tiling,
@@ -1655,6 +1671,7 @@ void vktut::hello_triangle::application::transition_image_layout(
     VkFormat format,
     VkImageLayout old_layout,
     VkImageLayout new_layout,
+    std::uint32_t mip_levels,
     VkCommandPool command_pool,
     VkQueue queue)
 {
@@ -1673,7 +1690,7 @@ void vktut::hello_triangle::application::transition_image_layout(
           {
               .aspectMask = VK_IMAGE_ASPECT_COLOR_BIT,
               .baseMipLevel = 0,
-              .levelCount = 1,
+              .levelCount = mip_levels,
               .baseArrayLayer = 0,
               .layerCount = 1,
           },
@@ -1728,6 +1745,145 @@ void vktut::hello_triangle::application::transition_image_layout(
                        &barrier);
 
   end_single_time_commands(command_buffer, command_pool, queue);
+}
+
+void vktut::hello_triangle::application::generate_mipmaps(
+    VkImage image,
+    VkFormat image_format,
+    std::int32_t tex_width,
+    std::int32_t tex_height,
+    std::uint32_t mip_levels)
+{
+  VkFormatProperties format_properties;
+  vkGetPhysicalDeviceFormatProperties(
+      m_physical_device, image_format, &format_properties);
+
+  if ((format_properties.optimalTilingFeatures
+       & VK_FORMAT_FEATURE_SAMPLED_IMAGE_FILTER_LINEAR_BIT)
+      == 0U)
+  {
+    throw std::runtime_error {
+        "texture image format does not support linear blitting!"};
+  }
+
+  VkCommandBuffer command_buffer = begin_single_time_commands(m_command_pool);
+
+  VkImageMemoryBarrier barrier = {
+      .sType = VK_STRUCTURE_TYPE_IMAGE_MEMORY_BARRIER,
+      .srcQueueFamilyIndex = VK_QUEUE_FAMILY_IGNORED,
+      .dstQueueFamilyIndex = VK_QUEUE_FAMILY_IGNORED,
+      .image = image,
+      .subresourceRange =
+          {
+              .aspectMask = VK_IMAGE_ASPECT_COLOR_BIT,
+              .levelCount = 1,
+              .baseArrayLayer = 0,
+              .layerCount = 1,
+          },
+  };
+
+  std::int32_t mip_width = tex_width;
+  std::int32_t mip_height = tex_height;
+  for (std::uint32_t i = 1; i < mip_levels; ++i) {
+    barrier.subresourceRange.baseMipLevel = i - 1;
+    barrier.oldLayout = VK_IMAGE_LAYOUT_TRANSFER_DST_OPTIMAL;
+    barrier.newLayout = VK_IMAGE_LAYOUT_TRANSFER_SRC_OPTIMAL;
+    barrier.srcAccessMask = VK_ACCESS_TRANSFER_WRITE_BIT;
+    barrier.dstAccessMask = VK_ACCESS_TRANSFER_READ_BIT;
+
+    vkCmdPipelineBarrier(command_buffer,
+                         VK_PIPELINE_STAGE_TRANSFER_BIT,
+                         VK_PIPELINE_STAGE_TRANSFER_BIT,
+                         0,
+                         0,
+                         nullptr,
+                         0,
+                         nullptr,
+                         1,
+                         &barrier);
+
+    VkImageBlit blit = {
+        .srcSubresource =
+            {
+                .aspectMask = VK_IMAGE_ASPECT_COLOR_BIT,
+                .mipLevel = i - 1,
+                .baseArrayLayer = 0,
+                .layerCount = 1,
+            },
+        .srcOffsets =
+            {
+                {0, 0, 0},
+                {mip_width, mip_height, 1},
+            },
+        .dstSubresource =
+            {
+                .aspectMask = VK_IMAGE_ASPECT_COLOR_BIT,
+                .mipLevel = i,
+                .baseArrayLayer = 0,
+                .layerCount = 1,
+            },
+        .dstOffsets =
+            {
+                {0, 0, 0},
+                {
+                    mip_width > 1 ? mip_width / 2 : 1,
+                    mip_height > 1 ? mip_height / 2 : 1,
+                    1,
+                },
+            },
+    };
+
+    vkCmdBlitImage(command_buffer,
+                   image,
+                   VK_IMAGE_LAYOUT_TRANSFER_SRC_OPTIMAL,
+                   image,
+                   VK_IMAGE_LAYOUT_TRANSFER_DST_OPTIMAL,
+                   1,
+                   &blit,
+                   VK_FILTER_LINEAR);
+
+    barrier.oldLayout = VK_IMAGE_LAYOUT_TRANSFER_SRC_OPTIMAL;
+    barrier.newLayout = VK_IMAGE_LAYOUT_SHADER_READ_ONLY_OPTIMAL;
+    barrier.srcAccessMask = VK_ACCESS_TRANSFER_READ_BIT;
+    barrier.dstAccessMask = VK_ACCESS_SHADER_READ_BIT;
+
+    vkCmdPipelineBarrier(command_buffer,
+                         VK_PIPELINE_STAGE_TRANSFER_BIT,
+                         VK_PIPELINE_STAGE_FRAGMENT_SHADER_BIT,
+                         0,
+                         0,
+                         nullptr,
+                         0,
+                         nullptr,
+                         1,
+                         &barrier);
+
+    if (mip_width > 1) {
+      mip_width /= 2;
+    }
+    if (mip_height > 1) {
+      mip_height /= 2;
+    }
+  }
+
+  barrier.subresourceRange.baseMipLevel = mip_levels - 1;
+  barrier.oldLayout = VK_IMAGE_LAYOUT_TRANSFER_DST_OPTIMAL;
+  barrier.newLayout = VK_IMAGE_LAYOUT_SHADER_READ_ONLY_OPTIMAL;
+  barrier.srcAccessMask = VK_ACCESS_TRANSFER_WRITE_BIT;
+  barrier.dstAccessMask = VK_ACCESS_SHADER_READ_BIT;
+
+  vkCmdPipelineBarrier(command_buffer,
+                       VK_PIPELINE_STAGE_TRANSFER_BIT,
+                       VK_PIPELINE_STAGE_FRAGMENT_SHADER_BIT,
+                       0,
+                       0,
+                       nullptr,
+                       0,
+                       nullptr,
+                       1,
+                       &barrier);
+
+  end_single_time_commands(command_buffer, m_command_pool, m_graphics_queue);
 }
 
 void vktut::hello_triangle::application::copy_buffer_to_image(

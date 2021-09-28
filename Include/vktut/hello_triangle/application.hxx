@@ -59,6 +59,7 @@ private:
   std::vector<VkDeviceMemory> m_uniform_buffers_memory;
   VkDescriptorPool m_descriptor_pool;
   std::vector<VkDescriptorSet> m_descriptor_sets;
+  std::uint32_t m_mip_levels;
   VkImage m_texture_image;
   VkDeviceMemory m_texture_image_memory;
   VkImageView m_texture_image_view;
@@ -122,9 +123,11 @@ private:
   void create_depth_resources();
   VkImageView create_image_view(VkImage image,
                                 VkFormat format,
-                                VkImageAspectFlags aspect_flags);
+                                VkImageAspectFlags aspect_flags,
+                                std::uint32_t mip_levels);
   vulkan::image_and_memory create_image(std::uint32_t width,
                                         std::uint32_t height,
+                                        std::uint32_t mip_levels,
                                         VkFormat format,
                                         VkImageTiling tiling,
                                         VkImageUsageFlags usage,
@@ -146,8 +149,15 @@ private:
                                VkFormat format,
                                VkImageLayout old_layout,
                                VkImageLayout new_layout,
+                               std::uint32_t mip_levels,
                                VkCommandPool command_pool,
                                VkQueue queue);
+  void generate_mipmaps(
+    VkImage image,
+    VkFormat image_format,
+    std::int32_t tex_width,
+    std::int32_t tex_height,
+    std::uint32_t mip_levels);
   void copy_buffer_to_image(VkBuffer buffer,
                             VkImage image,
                             std::uint32_t width,
