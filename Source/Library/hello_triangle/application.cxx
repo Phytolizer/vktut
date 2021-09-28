@@ -62,6 +62,9 @@ vktut::hello_triangle::application::application()
     , m_depth_image(nullptr)
     , m_depth_image_memory(nullptr)
     , m_depth_image_view(nullptr)
+    , m_color_image(nullptr)
+    , m_color_image_memory(nullptr)
+    , m_color_image_view(nullptr)
 {
   init_window();
   init_vulkan();
@@ -100,6 +103,7 @@ void vktut::hello_triangle::application::init_vulkan()
   create_descriptor_set_layout();
   create_graphics_pipeline();
   create_command_pools();
+  create_color_resources();
   create_depth_resources();
   create_framebuffers();
   create_texture_image();
@@ -131,13 +135,13 @@ void vktut::hello_triangle::application::create_render_pass()
 {
   VkAttachmentDescription color_attachment = {
       .format = m_swap_chain_image_format,
-      .samples = VK_SAMPLE_COUNT_1_BIT,
+      .samples = m_msaa_samples,
       .loadOp = VK_ATTACHMENT_LOAD_OP_CLEAR,
       .storeOp = VK_ATTACHMENT_STORE_OP_STORE,
       .stencilLoadOp = VK_ATTACHMENT_LOAD_OP_DONT_CARE,
       .stencilStoreOp = VK_ATTACHMENT_STORE_OP_DONT_CARE,
       .initialLayout = VK_IMAGE_LAYOUT_UNDEFINED,
-      .finalLayout = VK_IMAGE_LAYOUT_PRESENT_SRC_KHR,
+      .finalLayout = VK_IMAGE_LAYOUT_COLOR_ATTACHMENT_OPTIMAL,
   };
 
   VkAttachmentReference color_attachment_ref = {
@@ -147,7 +151,7 @@ void vktut::hello_triangle::application::create_render_pass()
 
   VkAttachmentDescription depth_attachment = {
       .format = find_depth_format(),
-      .samples = VK_SAMPLE_COUNT_1_BIT,
+      .samples = m_msaa_samples,
       .loadOp = VK_ATTACHMENT_LOAD_OP_CLEAR,
       .storeOp = VK_ATTACHMENT_STORE_OP_DONT_CARE,
       .stencilLoadOp = VK_ATTACHMENT_LOAD_OP_DONT_CARE,
@@ -161,10 +165,27 @@ void vktut::hello_triangle::application::create_render_pass()
       .layout = VK_IMAGE_LAYOUT_DEPTH_STENCIL_ATTACHMENT_OPTIMAL,
   };
 
+  VkAttachmentDescription color_attachment_resolve = {
+      .format = m_swap_chain_image_format,
+      .samples = VK_SAMPLE_COUNT_1_BIT,
+      .loadOp = VK_ATTACHMENT_LOAD_OP_DONT_CARE,
+      .storeOp = VK_ATTACHMENT_STORE_OP_STORE,
+      .stencilLoadOp = VK_ATTACHMENT_LOAD_OP_DONT_CARE,
+      .stencilStoreOp = VK_ATTACHMENT_STORE_OP_DONT_CARE,
+      .initialLayout = VK_IMAGE_LAYOUT_UNDEFINED,
+      .finalLayout = VK_IMAGE_LAYOUT_PRESENT_SRC_KHR,
+  };
+
+  VkAttachmentReference color_attachment_resolve_ref = {
+      .attachment = 2,
+      .layout = VK_IMAGE_LAYOUT_COLOR_ATTACHMENT_OPTIMAL,
+  };
+
   VkSubpassDescription subpass = {
       .pipelineBindPoint = VK_PIPELINE_BIND_POINT_GRAPHICS,
       .colorAttachmentCount = 1,
       .pColorAttachments = &color_attachment_ref,
+      .pResolveAttachments = &color_attachment_resolve_ref,
       .pDepthStencilAttachment = &depth_attachment_ref,
   };
 
@@ -180,6 +201,7 @@ void vktut::hello_triangle::application::create_render_pass()
   std::array attachments = {
       color_attachment,
       depth_attachment,
+      color_attachment_resolve,
   };
 
   VkRenderPassCreateInfo render_pass_info = {
@@ -423,6 +445,7 @@ void vktut::hello_triangle::application::pick_physical_device()
     throw std::runtime_error {"no suitable devices found!"};
   }
   m_physical_device = best_device->second;
+  m_msaa_samples = get_max_usable_sample_count();
 }
 
 void vktut::hello_triangle::application::create_logical_device()
@@ -452,6 +475,7 @@ void vktut::hello_triangle::application::create_logical_device()
                  });
 
   VkPhysicalDeviceFeatures device_features = {
+      .sampleRateShading = VK_TRUE,
       .samplerAnisotropy = VK_TRUE,
   };
 
@@ -490,8 +514,9 @@ void vktut::hello_triangle::application::create_framebuffers()
 
   for (size_t i = 0; i < m_swap_chain_image_views.size(); ++i) {
     std::array attachments = {
-        m_swap_chain_image_views[i],
+        m_color_image_view,
         m_depth_image_view,
+        m_swap_chain_image_views[i],
     };
 
     VkFramebufferCreateInfo framebuffer_info = {
@@ -777,6 +802,7 @@ void vktut::hello_triangle::application::recreate_swap_chain()
   create_image_views();
   create_render_pass();
   create_graphics_pipeline();
+  create_color_resources();
   create_depth_resources();
   create_framebuffers();
   create_uniform_buffers();
@@ -787,6 +813,9 @@ void vktut::hello_triangle::application::recreate_swap_chain()
 
 void vktut::hello_triangle::application::cleanup_swap_chain()
 {
+  vkDestroyImageView(m_device, m_color_image_view, nullptr);
+  vkDestroyImage(m_device, m_color_image, nullptr);
+  vkFreeMemory(m_device, m_color_image_memory, nullptr);
   vkDestroyImageView(m_device, m_depth_image_view, nullptr);
   vkDestroyImage(m_device, m_depth_image, nullptr);
   vkFreeMemory(m_device, m_depth_image_memory, nullptr);
@@ -1035,9 +1064,9 @@ void vktut::hello_triangle::application::create_graphics_pipeline()
 
   VkPipelineMultisampleStateCreateInfo multisampling = {
       .sType = VK_STRUCTURE_TYPE_PIPELINE_MULTISAMPLE_STATE_CREATE_INFO,
-      .rasterizationSamples = VK_SAMPLE_COUNT_1_BIT,
-      .sampleShadingEnable = VK_FALSE,
-      .minSampleShading = 1,
+      .rasterizationSamples = m_msaa_samples,
+      .sampleShadingEnable = VK_TRUE,
+      .minSampleShading = 0.2F,
       .pSampleMask = nullptr,
       .alphaToCoverageEnable = VK_FALSE,
       .alphaToOneEnable = VK_FALSE,
@@ -1355,6 +1384,7 @@ void vktut::hello_triangle::application::create_texture_image()
   auto image = create_image(tex_width,
                             tex_height,
                             m_mip_levels,
+                            VK_SAMPLE_COUNT_1_BIT,
                             VK_FORMAT_R8G8B8A8_SRGB,
                             VK_IMAGE_TILING_OPTIMAL,
                             VK_IMAGE_USAGE_TRANSFER_SRC_BIT
@@ -1429,6 +1459,7 @@ void vktut::hello_triangle::application::create_depth_resources()
   auto depth = create_image(m_swap_chain_extent.width,
                             m_swap_chain_extent.height,
                             1,
+                            m_msaa_samples,
                             depth_format,
                             VK_IMAGE_TILING_OPTIMAL,
                             VK_IMAGE_USAGE_DEPTH_STENCIL_ATTACHMENT_BIT,
@@ -1445,6 +1476,25 @@ void vktut::hello_triangle::application::create_depth_resources()
                           1,
                           m_command_pool,
                           m_graphics_queue);
+}
+
+void vktut::hello_triangle::application::create_color_resources()
+{
+  VkFormat color_format = m_swap_chain_image_format;
+
+  auto color = create_image(m_swap_chain_extent.width,
+                            m_swap_chain_extent.height,
+                            1,
+                            m_msaa_samples,
+                            color_format,
+                            VK_IMAGE_TILING_OPTIMAL,
+                            VK_IMAGE_USAGE_TRANSIENT_ATTACHMENT_BIT
+                                | VK_IMAGE_USAGE_COLOR_ATTACHMENT_BIT,
+                            VK_MEMORY_PROPERTY_DEVICE_LOCAL_BIT);
+  m_color_image = color.image;
+  m_color_image_memory = color.memory;
+  m_color_image_view = create_image_view(
+      m_color_image, color_format, VK_IMAGE_ASPECT_COLOR_BIT, 1);
 }
 
 VkImageView vktut::hello_triangle::application::create_image_view(
@@ -1489,6 +1539,7 @@ vktut::hello_triangle::application::create_image(
     std::uint32_t width,
     std::uint32_t height,
     std::uint32_t mip_levels,
+    VkSampleCountFlagBits num_samples,
     VkFormat format,
     VkImageTiling tiling,
     VkImageUsageFlags usage,
@@ -1507,7 +1558,7 @@ vktut::hello_triangle::application::create_image(
           },
       .mipLevels = mip_levels,
       .arrayLayers = 1,
-      .samples = VK_SAMPLE_COUNT_1_BIT,
+      .samples = num_samples,
       .tiling = tiling,
       .usage = usage,
       .sharingMode = VK_SHARING_MODE_EXCLUSIVE,
@@ -2056,6 +2107,31 @@ VkFormat vktut::hello_triangle::application::find_depth_format()
       },
       VK_IMAGE_TILING_OPTIMAL,
       VK_FORMAT_FEATURE_DEPTH_STENCIL_ATTACHMENT_BIT);
+}
+
+VkSampleCountFlagBits
+vktut::hello_triangle::application::get_max_usable_sample_count()
+{
+  VkPhysicalDeviceProperties physical_device_properties;
+  vkGetPhysicalDeviceProperties(m_physical_device, &physical_device_properties);
+
+  VkSampleCountFlags counts =
+      physical_device_properties.limits.framebufferColorSampleCounts
+      & physical_device_properties.limits.framebufferDepthSampleCounts;
+  for (auto count : std::vector {
+           VK_SAMPLE_COUNT_64_BIT,
+           VK_SAMPLE_COUNT_32_BIT,
+           VK_SAMPLE_COUNT_16_BIT,
+           VK_SAMPLE_COUNT_8_BIT,
+           VK_SAMPLE_COUNT_4_BIT,
+           VK_SAMPLE_COUNT_2_BIT,
+       })
+  {
+    if ((counts & count) != 0U) {
+      return count;
+    }
+  }
+  return VK_SAMPLE_COUNT_1_BIT;
 }
 
 bool vktut::hello_triangle::application::has_stencil_component(VkFormat format)

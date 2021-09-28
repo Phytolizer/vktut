@@ -67,6 +67,10 @@ private:
   VkImage m_depth_image;
   VkDeviceMemory m_depth_image_memory;
   VkImageView m_depth_image_view;
+  VkImage m_color_image;
+  VkDeviceMemory m_color_image_memory;
+  VkImageView m_color_image_view;
+  VkSampleCountFlagBits m_msaa_samples = VK_SAMPLE_COUNT_1_BIT;
 
   static constexpr std::uint32_t width = 800;
   static constexpr std::uint32_t height = 600;
@@ -121,17 +125,20 @@ private:
   void create_texture_image_view();
   void create_texture_sampler();
   void create_depth_resources();
+  void create_color_resources();
   VkImageView create_image_view(VkImage image,
                                 VkFormat format,
                                 VkImageAspectFlags aspect_flags,
                                 std::uint32_t mip_levels);
-  vulkan::image_and_memory create_image(std::uint32_t width,
-                                        std::uint32_t height,
-                                        std::uint32_t mip_levels,
-                                        VkFormat format,
-                                        VkImageTiling tiling,
-                                        VkImageUsageFlags usage,
-                                        VkMemoryPropertyFlags properties);
+  vktut::vulkan::image_and_memory create_image(
+      std::uint32_t width,
+      std::uint32_t height,
+      std::uint32_t mip_levels,
+      VkSampleCountFlagBits num_samples,
+      VkFormat format,
+      VkImageTiling tiling,
+      VkImageUsageFlags usage,
+      VkMemoryPropertyFlags properties);
   vulkan::buffer_and_memory create_buffer(VkDeviceSize size,
                                           VkBufferUsageFlags usage,
                                           VkMemoryPropertyFlags properties);
@@ -152,12 +159,11 @@ private:
                                std::uint32_t mip_levels,
                                VkCommandPool command_pool,
                                VkQueue queue);
-  void generate_mipmaps(
-    VkImage image,
-    VkFormat image_format,
-    std::int32_t tex_width,
-    std::int32_t tex_height,
-    std::uint32_t mip_levels);
+  void generate_mipmaps(VkImage image,
+                        VkFormat image_format,
+                        std::int32_t tex_width,
+                        std::int32_t tex_height,
+                        std::uint32_t mip_levels);
   void copy_buffer_to_image(VkBuffer buffer,
                             VkImage image,
                             std::uint32_t width,
@@ -184,6 +190,7 @@ private:
                                  VkImageTiling tiling,
                                  VkFormatFeatureFlags features);
   VkFormat find_depth_format();
+  VkSampleCountFlagBits get_max_usable_sample_count();
   static bool has_stencil_component(VkFormat format);
   static VkPresentModeKHR choose_swap_present_mode(
       const std::vector<VkPresentModeKHR>& available_present_modes);
