@@ -11,6 +11,7 @@
 #include <config.hpp>
 
 #include <vktut/utilities/files.hxx>
+#include <vktut/vulkan/buffer_utilities.hxx>
 #include <vktut/vulkan/debug.hxx>
 #include <vktut/vulkan/queue_family_indices.hxx>
 
@@ -924,19 +925,36 @@ void vktut::hello_triangle::application::create_graphics_pipeline()
 void vktut::hello_triangle::application::create_vertex_buffer()
 {
   auto buffer_size = sizeof(decltype(vertices)::value_type) * vertices.size();
-  auto buffer_and_memory =
+  auto staging_buffer_and_memory =
       create_buffer(buffer_size,
-                    VK_BUFFER_USAGE_VERTEX_BUFFER_BIT,
+                    VK_BUFFER_USAGE_TRANSFER_SRC_BIT,
                     VK_MEMORY_PROPERTY_HOST_VISIBLE_BIT
                         | VK_MEMORY_PROPERTY_HOST_COHERENT_BIT);
-  m_vertex_buffer = buffer_and_memory.buffer;
-  m_vertex_buffer_memory = buffer_and_memory.memory;
+  VkBuffer staging_buffer = staging_buffer_and_memory.buffer;
+  VkDeviceMemory staging_memory = staging_buffer_and_memory.memory;
   void* data = nullptr;
-  vkMapMemory(m_device, m_vertex_buffer_memory, 0, buffer_size, 0, &data);
+  vkMapMemory(m_device, staging_memory, 0, buffer_size, 0, &data);
   std::copy(vertices.begin(),
             vertices.begin() + buffer_size,
             static_cast<shaders::vertex*>(data));
-  vkUnmapMemory(m_device, m_vertex_buffer_memory);
+  vkUnmapMemory(m_device, staging_memory);
+
+  auto vertex_buffer_and_memory = create_buffer(
+      buffer_size,
+      VK_BUFFER_USAGE_TRANSFER_DST_BIT | VK_BUFFER_USAGE_VERTEX_BUFFER_BIT,
+      VK_MEMORY_PROPERTY_DEVICE_LOCAL_BIT);
+  m_vertex_buffer = vertex_buffer_and_memory.buffer;
+  m_vertex_buffer_memory = vertex_buffer_and_memory.memory;
+
+  vulkan::buffer_utilities::copy_buffer(staging_buffer,
+                                        m_vertex_buffer,
+                                        buffer_size,
+                                        m_transfer_queue,
+                                        m_device,
+                                        m_transfer_command_pool);
+
+  vkDestroyBuffer(m_device, staging_buffer, nullptr);
+  vkFreeMemory(m_device, staging_memory, nullptr);
 }
 
 vktut::vulkan::buffer_and_memory
