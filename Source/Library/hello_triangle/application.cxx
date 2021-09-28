@@ -1,4 +1,5 @@
 #include <algorithm>
+#include <cassert>
 #include <limits>
 #include <map>
 #include <unordered_set>
@@ -34,6 +35,8 @@ vktut::hello_triangle::application::application()
     , m_render_pass(nullptr)
     , m_graphics_pipeline(nullptr)
     , m_command_pool(nullptr)
+    , m_vertex_buffer(nullptr)
+    , m_vertex_buffer_memory(nullptr)
 {
   init_window();
   init_vulkan();
@@ -72,6 +75,7 @@ void vktut::hello_triangle::application::init_vulkan()
   create_graphics_pipeline();
   create_framebuffers();
   create_command_pool();
+  create_vertex_buffer();
   create_command_buffers();
   create_sync_objects();
 }
@@ -213,6 +217,9 @@ void vktut::hello_triangle::application::main_loop()
 void vktut::hello_triangle::application::cleanup()
 {
   cleanup_swap_chain();
+
+  vkDestroyBuffer(m_device, m_vertex_buffer, nullptr);
+  vkFreeMemory(m_device, m_vertex_buffer_memory, nullptr);
 
   for (auto* fence : m_in_flight_fences) {
     vkDestroyFence(m_device, fence, nullptr);
@@ -432,7 +439,15 @@ void vktut::hello_triangle::application::create_command_buffers()
     vkCmdBindPipeline(m_command_buffers[i],
                       VK_PIPELINE_BIND_POINT_GRAPHICS,
                       m_graphics_pipeline);
-    vkCmdDraw(m_command_buffers[i], 3, 1, 0, 0);
+    std::array vertex_buffers = {
+        m_vertex_buffer,
+    };
+    std::array offsets = {
+        VkDeviceSize {0},
+    };
+    vkCmdBindVertexBuffers(
+        m_command_buffers[i], 0, 1, vertex_buffers.data(), offsets.data());
+    vkCmdDraw(m_command_buffers[i], vertices.size(), 1, 0, 0);
     vkCmdEndRenderPass(m_command_buffers[i]);
     if (vkEndCommandBuffer(m_command_buffers[i]) != VK_SUCCESS) {
       throw std::runtime_error {"failed to record command buffer!"};
@@ -725,12 +740,15 @@ void vktut::hello_triangle::application::create_graphics_pipeline()
       frag_shader_stage_info,
   };
 
+  auto binding_description = shaders::vertex::binding_description();
+  auto attribute_descriptions = shaders::vertex::attribute_descriptions();
+
   VkPipelineVertexInputStateCreateInfo vertex_input_info = {
       .sType = VK_STRUCTURE_TYPE_PIPELINE_VERTEX_INPUT_STATE_CREATE_INFO,
-      .vertexBindingDescriptionCount = 0,
-      .pVertexBindingDescriptions = nullptr,
-      .vertexAttributeDescriptionCount = 0,
-      .pVertexAttributeDescriptions = nullptr,
+      .vertexBindingDescriptionCount = 1,
+      .pVertexBindingDescriptions = &binding_description,
+      .vertexAttributeDescriptionCount = attribute_descriptions.size(),
+      .pVertexAttributeDescriptions = attribute_descriptions.data(),
   };
 
   VkPipelineInputAssemblyStateCreateInfo input_assembly = {
@@ -868,6 +886,49 @@ void vktut::hello_triangle::application::create_graphics_pipeline()
   vkDestroyShaderModule(m_device, frag_shader_module, nullptr);
 }
 
+void vktut::hello_triangle::application::create_vertex_buffer()
+{
+  VkBufferCreateInfo buffer_info = {
+      .sType = VK_STRUCTURE_TYPE_BUFFER_CREATE_INFO,
+      .size = sizeof(decltype(vertices)::value_type) * vertices.size(),
+      .usage = VK_BUFFER_USAGE_VERTEX_BUFFER_BIT,
+      .sharingMode = VK_SHARING_MODE_EXCLUSIVE,
+  };
+
+  if (vkCreateBuffer(m_device, &buffer_info, nullptr, &m_vertex_buffer)
+      != VK_SUCCESS)
+  {
+    throw std::runtime_error {"failed to create vertex buffer!"};
+  }
+
+  VkMemoryRequirements memory_requirements;
+  vkGetBufferMemoryRequirements(
+      m_device, m_vertex_buffer, &memory_requirements);
+
+  VkMemoryAllocateInfo alloc_info = {
+      .sType = VK_STRUCTURE_TYPE_MEMORY_ALLOCATE_INFO,
+      .allocationSize = memory_requirements.size,
+      .memoryTypeIndex =
+          find_memory_type(memory_requirements.memoryTypeBits,
+                           VK_MEMORY_PROPERTY_HOST_VISIBLE_BIT
+                               | VK_MEMORY_PROPERTY_HOST_COHERENT_BIT),
+  };
+
+  if (vkAllocateMemory(m_device, &alloc_info, nullptr, &m_vertex_buffer_memory)
+      != VK_SUCCESS)
+  {
+    throw std::runtime_error {"failed to allocate vertex buffer memory!"};
+  }
+
+  vkBindBufferMemory(m_device, m_vertex_buffer, m_vertex_buffer_memory, 0);
+  void* data = nullptr;
+  vkMapMemory(m_device, m_vertex_buffer_memory, 0, buffer_info.size, 0, &data);
+  std::copy(vertices.begin(),
+            vertices.begin() + buffer_info.size,
+            static_cast<shaders::vertex*>(data));
+  vkUnmapMemory(m_device, m_vertex_buffer_memory);
+}
+
 VkShaderModule vktut::hello_triangle::application::create_shader_module(
     const std::vector<char>& code)
 {
@@ -959,6 +1020,32 @@ VkExtent2D vktut::hello_triangle::application::choose_swap_extent(
                                     capabilities.maxImageExtent.height);
 
   return actual_extent;
+}
+
+std::uint32_t vktut::hello_triangle::application::find_memory_type(
+    std::uint32_t type_filter, VkMemoryPropertyFlags properties)
+{
+  VkPhysicalDeviceMemoryProperties memory_properties;
+  vkGetPhysicalDeviceMemoryProperties(m_physical_device, &memory_properties);
+
+#ifndef NDEBUG
+  // NOLINTNEXTLINE(hicpp-no-array-decay,cppcoreguidelines-pro-bounds-array-to-pointer-decay)
+  assert(memory_properties.memoryTypeCount <= 32);
+#endif
+
+  for (std::uint32_t i = 0; i < memory_properties.memoryTypeCount; ++i) {
+    if ((type_filter & (1 << i)) != 0U
+        // as long as memory_properties.memoryTypeCount <= 32 this is safe...
+        // that property is asserted above
+        // NOLINTNEXTLINE(cppcoreguidelines-pro-bounds-constant-array-index)
+        && (memory_properties.memoryTypes[i].propertyFlags & properties)
+            == properties)
+    {
+      return i;
+    }
+  }
+
+  throw std::runtime_error {"failed to find suitable memory type!"};
 }
 
 VkPresentModeKHR vktut::hello_triangle::application::choose_swap_present_mode(

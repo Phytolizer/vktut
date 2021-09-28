@@ -8,6 +8,7 @@
 #define GLFW_INCLUDE_VULKAN
 #include <GLFW/glfw3.h>
 
+#include <vktut/shaders/vertex.hxx>
 #include <vktut/vulkan/instance.hxx>
 #include <vktut/vulkan/swap_chain_support_details.hxx>
 
@@ -41,6 +42,8 @@ private:
   std::vector<VkFence> m_images_in_flight;
   std::size_t m_current_frame = 0;
   bool m_framebuffer_resized = false;
+  VkBuffer m_vertex_buffer;
+  VkDeviceMemory m_vertex_buffer_memory;
 
   static constexpr std::uint32_t width = 800;
   static constexpr std::uint32_t height = 600;
@@ -51,6 +54,12 @@ private:
       VK_KHR_SWAPCHAIN_EXTENSION_NAME,
   };
   static constexpr int max_frames_in_flight = 2;
+
+  static constexpr std::array vertices = {
+      shaders::vertex {{0.0, -0.5}, {1, 0, 0}},
+      shaders::vertex {{0.5, 0.5}, {0, 1, 0}},
+      shaders::vertex {{-0.5, 0.5}, {0, 0, 1}},
+  };
 
 #ifdef NDEBUG
   static constexpr bool validation_layers_enabled = false;
@@ -78,6 +87,7 @@ private:
   void main_loop();
   void cleanup();
   void create_graphics_pipeline();
+  void create_vertex_buffer();
   VkShaderModule create_shader_module(const std::vector<char>& code);
   void setup_debug_messenger();
   void pick_physical_device();
@@ -94,6 +104,8 @@ private:
       VkPhysicalDevice device);
   int rate_device_suitability(VkPhysicalDevice device);
   VkExtent2D choose_swap_extent(const VkSurfaceCapabilitiesKHR& capabilities);
+  std::uint32_t find_memory_type(std::uint32_t type_filter,
+                                        VkMemoryPropertyFlags properties);
   static VkPresentModeKHR choose_swap_present_mode(
       const std::vector<VkPresentModeKHR>& available_present_modes);
   static VkSurfaceFormatKHR choose_swap_surface_format(
