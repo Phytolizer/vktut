@@ -33,6 +33,7 @@ private:
   VkExtent2D m_swap_chain_extent;
   std::vector<VkImageView> m_swap_chain_image_views;
   VkRenderPass m_render_pass;
+  VkDescriptorSetLayout m_descriptor_set_layout;
   VkPipelineLayout m_pipeline_layout;
   VkPipeline m_graphics_pipeline;
   std::vector<VkFramebuffer> m_swap_chain_framebuffers;
@@ -50,6 +51,10 @@ private:
   VkDeviceMemory m_vertex_buffer_memory;
   VkBuffer m_index_buffer;
   VkDeviceMemory m_index_buffer_memory;
+  std::vector<VkBuffer> m_uniform_buffers;
+  std::vector<VkDeviceMemory> m_uniform_buffers_memory;
+  VkDescriptorPool m_descriptor_pool;
+  std::vector<VkDescriptorSet> m_descriptor_sets;
 
   static constexpr std::uint32_t width = 800;
   static constexpr std::uint32_t height = 600;
@@ -101,9 +106,13 @@ private:
   bool check_validation_layers_support();
   void main_loop();
   void cleanup();
+  void create_descriptor_set_layout();
   void create_graphics_pipeline();
   void create_vertex_buffer();
   void create_index_buffer();
+  void create_uniform_buffers();
+  void create_descriptor_pool();
+  void create_descriptor_sets();
   vulkan::buffer_and_memory create_buffer(VkDeviceSize size,
                                           VkBufferUsageFlags usage,
                                           VkMemoryPropertyFlags properties);
@@ -119,6 +128,7 @@ private:
   void draw_frame();
   void recreate_swap_chain();
   void cleanup_swap_chain();
+  void update_uniform_buffer(std::uint32_t current_image);
   vulkan::swap_chain_support_details query_swap_chain_support(
       VkPhysicalDevice device);
   int rate_device_suitability(VkPhysicalDevice device);

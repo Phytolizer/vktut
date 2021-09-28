@@ -1,5 +1,6 @@
 #include <algorithm>
 #include <cassert>
+#include <chrono>
 #include <limits>
 #include <map>
 #include <unordered_set>
@@ -10,6 +11,12 @@
 #include <GLFW/glfw3.h>
 #include <config.hpp>
 
+#define GLM_FORCE_RADIANS
+#define GLM_FORCE_DEFAULT_ALIGNED_GENTYPES
+#include <glm/glm.hpp>
+#include <glm/gtc/matrix_transform.hpp>
+
+#include <vktut/shaders/uniform_buffer_object.hxx>
 #include <vktut/utilities/files.hxx>
 #include <vktut/vulkan/buffer_utilities.hxx>
 #include <vktut/vulkan/debug.hxx>
@@ -33,6 +40,7 @@ vktut::hello_triangle::application::application()
     , m_swap_chain(nullptr)
     , m_swap_chain_image_format()
     , m_swap_chain_extent()
+    , m_descriptor_set_layout(nullptr)
     , m_pipeline_layout(nullptr)
     , m_render_pass(nullptr)
     , m_graphics_pipeline(nullptr)
@@ -42,6 +50,7 @@ vktut::hello_triangle::application::application()
     , m_vertex_buffer_memory(nullptr)
     , m_index_buffer(nullptr)
     , m_index_buffer_memory(nullptr)
+    , m_descriptor_pool(nullptr)
 {
   init_window();
   init_vulkan();
@@ -77,11 +86,15 @@ void vktut::hello_triangle::application::init_vulkan()
   create_swap_chain();
   create_image_views();
   create_render_pass();
+  create_descriptor_set_layout();
   create_graphics_pipeline();
   create_framebuffers();
   create_command_pools();
   create_vertex_buffer();
   create_index_buffer();
+  create_uniform_buffers();
+  create_descriptor_pool();
+  create_descriptor_sets();
   create_command_buffers();
   create_sync_objects();
 }
@@ -224,6 +237,8 @@ void vktut::hello_triangle::application::cleanup()
 {
   cleanup_swap_chain();
 
+  vkDestroyDescriptorSetLayout(m_device, m_descriptor_set_layout, nullptr);
+
   vkDestroyBuffer(m_device, m_index_buffer, nullptr);
   vkFreeMemory(m_device, m_index_buffer_memory, nullptr);
   vkDestroyBuffer(m_device, m_vertex_buffer, nullptr);
@@ -250,6 +265,30 @@ void vktut::hello_triangle::application::cleanup()
 
   glfwDestroyWindow(m_window);
   glfwTerminate();
+}
+
+void vktut::hello_triangle::application::create_descriptor_set_layout()
+{
+  VkDescriptorSetLayoutBinding ubo_layout_binding = {
+      .binding = 0,
+      .descriptorType = VK_DESCRIPTOR_TYPE_UNIFORM_BUFFER,
+      .descriptorCount = 1,
+      .stageFlags = VK_SHADER_STAGE_VERTEX_BIT,
+      .pImmutableSamplers = nullptr,
+  };
+
+  VkDescriptorSetLayoutCreateInfo layout_info = {
+      .sType = VK_STRUCTURE_TYPE_DESCRIPTOR_SET_LAYOUT_CREATE_INFO,
+      .bindingCount = 1,
+      .pBindings = &ubo_layout_binding,
+  };
+
+  if (vkCreateDescriptorSetLayout(
+          m_device, &layout_info, nullptr, &m_descriptor_set_layout)
+      != VK_SUCCESS)
+  {
+    throw std::runtime_error {"failed to create descriptor set layout!"};
+  }
 }
 
 void vktut::hello_triangle::application::setup_debug_messenger()
@@ -483,6 +522,14 @@ void vktut::hello_triangle::application::create_command_buffers()
         m_command_buffers[i], 0, 1, vertex_buffers.data(), offsets.data());
     vkCmdBindIndexBuffer(
         m_command_buffers[i], m_index_buffer, 0, VK_INDEX_TYPE_UINT16);
+    vkCmdBindDescriptorSets(m_command_buffers[i],
+                            VK_PIPELINE_BIND_POINT_GRAPHICS,
+                            m_pipeline_layout,
+                            0,
+                            1,
+                            &m_descriptor_sets[i],
+                            0,
+                            nullptr);
     vkCmdDrawIndexed(m_command_buffers[i], indices.size(), 1, 0, 0, 0);
     vkCmdEndRenderPass(m_command_buffers[i]);
     if (vkEndCommandBuffer(m_command_buffers[i]) != VK_SUCCESS) {
@@ -558,6 +605,8 @@ void vktut::hello_triangle::application::draw_frame()
                     std::numeric_limits<std::uint64_t>::max());
   }
   // 2. execute the command buffer with that image
+  update_uniform_buffer(image_index);
+
   VkSubmitInfo submit_info = {
       .sType = VK_STRUCTURE_TYPE_SUBMIT_INFO,
   };
@@ -634,6 +683,9 @@ void vktut::hello_triangle::application::recreate_swap_chain()
   create_render_pass();
   create_graphics_pipeline();
   create_framebuffers();
+  create_uniform_buffers();
+  create_descriptor_pool();
+  create_descriptor_sets();
   create_command_buffers();
 }
 
@@ -653,6 +705,53 @@ void vktut::hello_triangle::application::cleanup_swap_chain()
     vkDestroyImageView(m_device, image_view, nullptr);
   }
   vkDestroySwapchainKHR(m_device, m_swap_chain, nullptr);
+
+  for (size_t i = 0; i < m_swap_chain_images.size(); ++i) {
+    vkDestroyBuffer(m_device, m_uniform_buffers[i], nullptr);
+    vkFreeMemory(m_device, m_uniform_buffers_memory[i], nullptr);
+  }
+
+  vkDestroyDescriptorPool(m_device, m_descriptor_pool, nullptr);
+}
+
+void vktut::hello_triangle::application::update_uniform_buffer(
+    std::uint32_t current_image)
+{
+  static auto start_time = std::chrono::high_resolution_clock::now();
+
+  auto current_time = std::chrono::high_resolution_clock::now();
+  float time = std::chrono::duration<float, std::chrono::seconds::period>(
+                   current_time - start_time)
+                   .count();
+
+  shaders::uniform_buffer_object ubo = {
+      .model = glm::rotate(glm::mat4 {1.0F},
+                           time * glm::radians(90.0F),
+                           glm::vec3 {0.0F, 0.0F, 1.0F}),
+      .view = glm::lookAt(glm::vec3 {2.0F, 2.0F, 2.0F},
+                          glm::vec3 {0.0F, 0.0F, 0.0F},
+                          glm::vec3 {0.0F, 0.0F, 1.0F}),
+      .proj =
+          glm::perspective(glm::radians(45.0F),
+                           static_cast<float>(m_swap_chain_extent.width)
+                               / static_cast<float>(m_swap_chain_extent.height),
+                           0.1F,
+                           10.0F),
+  };
+
+  // flip y axis, vulkan has a sensible y axis unlike ogl
+  ubo.proj[1][1] *= -1;
+
+  void* data = nullptr;
+  vkMapMemory(m_device,
+              m_uniform_buffers_memory[current_image],
+              0,
+              sizeof(shaders::uniform_buffer_object),
+              0,
+              &data);
+  // NOLINTNEXTLINE(cppcoreguidelines-pro-bounds-pointer-arithmetic)
+  std::copy(&ubo, &ubo + 1, static_cast<shaders::uniform_buffer_object*>(data));
+  vkUnmapMemory(m_device, m_uniform_buffers_memory[current_image]);
 }
 
 vktut::vulkan::swap_chain_support_details
@@ -826,7 +925,7 @@ void vktut::hello_triangle::application::create_graphics_pipeline()
       .rasterizerDiscardEnable = VK_FALSE,
       .polygonMode = VK_POLYGON_MODE_FILL,
       .cullMode = VK_CULL_MODE_BACK_BIT,
-      .frontFace = VK_FRONT_FACE_CLOCKWISE,
+      .frontFace = VK_FRONT_FACE_COUNTER_CLOCKWISE,
       .depthBiasEnable = VK_FALSE,
       .depthBiasConstantFactor = 0,
       .depthBiasClamp = 0,
@@ -882,8 +981,8 @@ void vktut::hello_triangle::application::create_graphics_pipeline()
 
   VkPipelineLayoutCreateInfo pipeline_layout_info = {
       .sType = VK_STRUCTURE_TYPE_PIPELINE_LAYOUT_CREATE_INFO,
-      .setLayoutCount = 0,
-      .pSetLayouts = nullptr,
+      .setLayoutCount = 1,
+      .pSetLayouts = &m_descriptor_set_layout,
       .pushConstantRangeCount = 0,
       .pPushConstantRanges = nullptr,
   };
@@ -993,6 +1092,89 @@ void vktut::hello_triangle::application::create_index_buffer()
 
   vkDestroyBuffer(m_device, staging.buffer, nullptr);
   vkFreeMemory(m_device, staging.memory, nullptr);
+}
+
+void vktut::hello_triangle::application::create_uniform_buffers()
+{
+  VkDeviceSize buffer_size = sizeof(shaders::uniform_buffer_object);
+
+  m_uniform_buffers.resize(m_swap_chain_images.size());
+  m_uniform_buffers_memory.resize(m_swap_chain_images.size());
+
+  for (size_t i = 0; i < m_swap_chain_images.size(); ++i) {
+    auto uniform = create_buffer(buffer_size,
+                                 VK_BUFFER_USAGE_UNIFORM_BUFFER_BIT,
+                                 VK_MEMORY_PROPERTY_HOST_VISIBLE_BIT
+                                     | VK_MEMORY_PROPERTY_HOST_COHERENT_BIT);
+    m_uniform_buffers[i] = uniform.buffer;
+    m_uniform_buffers_memory[i] = uniform.memory;
+  }
+}
+
+void vktut::hello_triangle::application::create_descriptor_pool()
+{
+  VkDescriptorPoolSize pool_size = {
+      .type = VK_DESCRIPTOR_TYPE_UNIFORM_BUFFER,
+      .descriptorCount = static_cast<std::uint32_t>(m_swap_chain_images.size()),
+  };
+
+  VkDescriptorPoolCreateInfo pool_info = {
+      .sType = VK_STRUCTURE_TYPE_DESCRIPTOR_POOL_CREATE_INFO,
+      .flags = 0,
+      .maxSets = static_cast<std::uint32_t>(m_swap_chain_images.size()),
+      .poolSizeCount = 1,
+      .pPoolSizes = &pool_size,
+  };
+
+  if (vkCreateDescriptorPool(m_device, &pool_info, nullptr, &m_descriptor_pool)
+      != VK_SUCCESS)
+  {
+    throw std::runtime_error {"failed to create descriptor pool!"};
+  }
+}
+
+void vktut::hello_triangle::application::create_descriptor_sets()
+{
+  std::vector<VkDescriptorSetLayout> layouts;
+  layouts.resize(m_swap_chain_images.size(), m_descriptor_set_layout);
+
+  VkDescriptorSetAllocateInfo allocate_info = {
+      .sType = VK_STRUCTURE_TYPE_DESCRIPTOR_SET_ALLOCATE_INFO,
+      .descriptorPool = m_descriptor_pool,
+      .descriptorSetCount =
+          static_cast<std::uint32_t>(m_swap_chain_images.size()),
+      .pSetLayouts = layouts.data(),
+  };
+
+  m_descriptor_sets.resize(m_swap_chain_images.size());
+  if (vkAllocateDescriptorSets(
+          m_device, &allocate_info, m_descriptor_sets.data())
+      != VK_SUCCESS)
+  {
+    throw std::runtime_error {"failed to allocate descriptor sets!"};
+  }
+
+  for (std::size_t i = 0; i < m_swap_chain_images.size(); ++i) {
+    VkDescriptorBufferInfo buffer_info = {
+        .buffer = m_uniform_buffers[i],
+        .offset = 0,
+        .range = sizeof(shaders::uniform_buffer_object),
+    };
+
+    VkWriteDescriptorSet descriptor_write = {
+        .sType = VK_STRUCTURE_TYPE_WRITE_DESCRIPTOR_SET,
+        .dstSet = m_descriptor_sets[i],
+        .dstBinding = 0,
+        .dstArrayElement = 0,
+        .descriptorCount = 1,
+        .descriptorType = VK_DESCRIPTOR_TYPE_UNIFORM_BUFFER,
+        .pImageInfo = nullptr,
+        .pBufferInfo = &buffer_info,
+        .pTexelBufferView = nullptr,
+    };
+
+    vkUpdateDescriptorSets(m_device, 1, &descriptor_write, 0, nullptr);
+  }
 }
 
 vktut::vulkan::buffer_and_memory
