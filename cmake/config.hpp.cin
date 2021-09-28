@@ -1,3 +1,4 @@
 #pragma once
 
 #cmakedefine PROJECT_SOURCE_DIR "@PROJECT_SOURCE_DIR@"
+#cmakedefine PROJECT_BINARY_DIR "@PROJECT_BINARY_DIR@"

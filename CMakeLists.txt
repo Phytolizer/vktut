@@ -10,16 +10,53 @@ project(
 find_package(Vulkan REQUIRED)
 find_package(glfw3 REQUIRED)
 
-configure_file(cmake/config.hpp.cin "${CMAKE_BINARY_DIR}/config.hpp")
+configure_file(cmake/config.hpp.cin "${PROJECT_BINARY_DIR}/config.hpp")
+
+if(UNIX)
+  set(GLSL_VALIDATOR "glslc")
+endif()
+
+file(GLOB_RECURSE GLSL_SOURCE_FILES CONFIGURE_DEPENDS
+     "Resources/Shaders/*.vert" "Resources/Shaders/*.frag"
+)
+
+foreach(GLSL_SOURCE_FILE ${GLSL_SOURCE_FILES})
+  get_filename_component(FILE_NAME ${GLSL_SOURCE_FILE} NAME)
+  set(SPIRV_OUTPUT_FILE
+      "${PROJECT_BINARY_DIR}/Resources/Shaders/${FILE_NAME}.spv"
+  )
+  add_custom_command(
+    OUTPUT ${SPIRV_OUTPUT_FILE}
+    COMMAND ${CMAKE_COMMAND} -E make_directory
+            "${PROJECT_BINARY_DIR}/Resources/Shaders"
+    COMMAND ${GLSL_VALIDATOR} ${GLSL_SOURCE_FILE} -o ${SPIRV_OUTPUT_FILE}
+    DEPENDS ${GLSL_SOURCE_FILE}
+  )
+  list(APPEND SPIRV_OUTPUT_FILES ${SPIRV_OUTPUT_FILE})
+endforeach()
+
+add_custom_target(vktut_shaders DEPENDS ${SPIRV_OUTPUT_FILES})
 
 file(GLOB_RECURSE SOURCES CONFIGURE_DEPENDS "Source/Library/*.cxx")
 add_library(vktut_lib OBJECT ${SOURCES})
 target_include_directories(
-  vktut_lib PUBLIC "${PROJECT_SOURCE_DIR}/Include" "${CMAKE_BINARY_DIR}"
+  vktut_lib PUBLIC "${PROJECT_SOURCE_DIR}/Include" "${PROJECT_BINARY_DIR}"
 )
 target_compile_features(vktut_lib PUBLIC cxx_std_20)
 target_link_libraries(vktut_lib PUBLIC Vulkan::Vulkan glfw)
+add_dependencies(vktut_lib vktut_shaders)
 
 file(GLOB_RECURSE SOURCES CONFIGURE_DEPENDS "Source/Executable/*.cxx")
 add_executable(vktut_exe ${SOURCES})
 target_link_libraries(vktut_exe PRIVATE vktut_lib)
+
+add_custom_command(
+  TARGET vktut_exe
+  POST_BUILD
+  COMMAND ${CMAKE_COMMAND} -E make_directory
+          "$<TARGET_FILE_DIR:vktut_exe>/Resources/Shaders"
+  COMMAND
+    ${CMAKE_COMMAND} -E copy_directory
+    "${PROJECT_BINARY_DIR}/Resources/Shaders"
+    "$<TARGET_FILE_DIR:vktut_exe>/Resources/Shaders"
+)
