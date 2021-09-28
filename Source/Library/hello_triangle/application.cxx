@@ -28,6 +28,7 @@ vktut::hello_triangle::application::application()
     , m_graphics_queue(nullptr)
     , m_surface(nullptr)
     , m_present_queue(nullptr)
+    , m_transfer_queue(nullptr)
     , m_swap_chain(nullptr)
     , m_swap_chain_image_format()
     , m_swap_chain_extent()
@@ -35,6 +36,7 @@ vktut::hello_triangle::application::application()
     , m_render_pass(nullptr)
     , m_graphics_pipeline(nullptr)
     , m_command_pool(nullptr)
+    , m_transfer_command_pool(nullptr)
     , m_vertex_buffer(nullptr)
     , m_vertex_buffer_memory(nullptr)
 {
@@ -74,7 +76,7 @@ void vktut::hello_triangle::application::init_vulkan()
   create_render_pass();
   create_graphics_pipeline();
   create_framebuffers();
-  create_command_pool();
+  create_command_pools();
   create_vertex_buffer();
   create_command_buffers();
   create_sync_objects();
@@ -231,6 +233,7 @@ void vktut::hello_triangle::application::cleanup()
     vkDestroySemaphore(m_device, semaphore, nullptr);
   }
 
+  vkDestroyCommandPool(m_device, m_transfer_command_pool, nullptr);
   vkDestroyCommandPool(m_device, m_command_pool, nullptr);
   vkDestroyDevice(m_device, nullptr);
   vkDestroySurfaceKHR(m_instance->get(), m_surface, nullptr);
@@ -302,6 +305,7 @@ void vktut::hello_triangle::application::create_logical_device()
   std::unordered_set<std::uint32_t> unique_queue_families = {
       *indices.graphics_family,
       *indices.present_family,
+      *indices.transfer_family,
   };
   queue_create_infos.reserve(unique_queue_families.size());
   float queue_priority = 1;
@@ -333,6 +337,7 @@ void vktut::hello_triangle::application::create_logical_device()
   }
   vkGetDeviceQueue(m_device, *indices.graphics_family, 0, &m_graphics_queue);
   vkGetDeviceQueue(m_device, *indices.present_family, 0, &m_present_queue);
+  vkGetDeviceQueue(m_device, *indices.transfer_family, 0, &m_transfer_queue);
 }
 
 void vktut::hello_triangle::application::create_surface()
@@ -372,7 +377,7 @@ void vktut::hello_triangle::application::create_framebuffers()
   }
 }
 
-void vktut::hello_triangle::application::create_command_pool()
+void vktut::hello_triangle::application::create_command_pools()
 {
   auto queue_family_indices =
       vulkan::queue_family_indices::find(m_physical_device, m_surface);
@@ -388,11 +393,20 @@ void vktut::hello_triangle::application::create_command_pool()
   {
     throw std::runtime_error {"failed to create command pool!"};
   }
+
+  pool_info.queueFamilyIndex = *queue_family_indices.transfer_family;
+  if (vkCreateCommandPool(
+          m_device, &pool_info, nullptr, &m_transfer_command_pool)
+      != VK_SUCCESS)
+  {
+    throw std::runtime_error {"failed to create transfer command pool!"};
+  }
 }
 
 void vktut::hello_triangle::application::create_command_buffers()
 {
   m_command_buffers.resize(m_swap_chain_framebuffers.size());
+  m_transfer_command_buffers.resize(m_swap_chain_framebuffers.size());
 
   VkCommandBufferAllocateInfo alloc_info = {
       .sType = VK_STRUCTURE_TYPE_COMMAND_BUFFER_ALLOCATE_INFO,
@@ -406,6 +420,16 @@ void vktut::hello_triangle::application::create_command_buffers()
       != VK_SUCCESS)
   {
     throw std::runtime_error {"failed to allocate command buffers!"};
+  }
+
+  alloc_info.commandPool = m_transfer_command_pool;
+  alloc_info.commandBufferCount =
+      static_cast<std::uint32_t>(m_transfer_command_buffers.size());
+  if (vkAllocateCommandBuffers(
+          m_device, &alloc_info, m_transfer_command_buffers.data())
+      != VK_SUCCESS)
+  {
+    throw std::runtime_error {"failed to allocate transfer command buffers!"};
   }
 
   for (size_t i = 0; i < m_command_buffers.size(); ++i) {
@@ -681,16 +705,21 @@ void vktut::hello_triangle::application::create_swap_chain()
   std::array queue_family_indices = {
       *indices.graphics_family,
       *indices.present_family,
+      *indices.transfer_family,
   };
 
+  std::array dedup_queue_family_indices = {
+      *indices.graphics_family,
+      *indices.transfer_family,
+  };
+
+  create_info.imageSharingMode = VK_SHARING_MODE_CONCURRENT;
   if (indices.graphics_family != indices.present_family) {
-    create_info.imageSharingMode = VK_SHARING_MODE_CONCURRENT;
-    create_info.queueFamilyIndexCount = 2;
+    create_info.queueFamilyIndexCount = 3;
     create_info.pQueueFamilyIndices = queue_family_indices.data();
   } else {
-    create_info.imageSharingMode = VK_SHARING_MODE_EXCLUSIVE;
-    create_info.queueFamilyIndexCount = 0;
-    create_info.pQueueFamilyIndices = nullptr;
+    create_info.queueFamilyIndexCount = 2;
+    create_info.pQueueFamilyIndices = dedup_queue_family_indices.data();
   }
 
   create_info.preTransform = swap_chain_support.capabilities.currentTransform;
@@ -888,45 +917,70 @@ void vktut::hello_triangle::application::create_graphics_pipeline()
 
 void vktut::hello_triangle::application::create_vertex_buffer()
 {
+  auto buffer_size = sizeof(decltype(vertices)::value_type) * vertices.size();
+  auto buffer_and_memory =
+      create_buffer(buffer_size,
+                    VK_BUFFER_USAGE_VERTEX_BUFFER_BIT,
+                    VK_MEMORY_PROPERTY_HOST_VISIBLE_BIT
+                        | VK_MEMORY_PROPERTY_HOST_COHERENT_BIT);
+  m_vertex_buffer = buffer_and_memory.buffer;
+  m_vertex_buffer_memory = buffer_and_memory.memory;
+  void* data = nullptr;
+  vkMapMemory(m_device, m_vertex_buffer_memory, 0, buffer_size, 0, &data);
+  std::copy(vertices.begin(),
+            vertices.begin() + buffer_size,
+            static_cast<shaders::vertex*>(data));
+  vkUnmapMemory(m_device, m_vertex_buffer_memory);
+}
+
+vktut::vulkan::buffer_and_memory
+vktut::hello_triangle::application::create_buffer(
+    VkDeviceSize size,
+    VkBufferUsageFlags usage,
+    VkMemoryPropertyFlags properties)
+{
+  auto indices =
+      vulkan::queue_family_indices::find(m_physical_device, m_surface);
+  std::array queue_family_indices = {
+      *indices.graphics_family,
+      *indices.transfer_family,
+  };
   VkBufferCreateInfo buffer_info = {
       .sType = VK_STRUCTURE_TYPE_BUFFER_CREATE_INFO,
-      .size = sizeof(decltype(vertices)::value_type) * vertices.size(),
-      .usage = VK_BUFFER_USAGE_VERTEX_BUFFER_BIT,
-      .sharingMode = VK_SHARING_MODE_EXCLUSIVE,
+      .size = size,
+      .usage = usage,
+      .sharingMode = VK_SHARING_MODE_CONCURRENT,
+      .queueFamilyIndexCount = 2,
+      .pQueueFamilyIndices = queue_family_indices.data(),
   };
 
-  if (vkCreateBuffer(m_device, &buffer_info, nullptr, &m_vertex_buffer)
-      != VK_SUCCESS)
-  {
+  VkBuffer buffer = nullptr;
+  if (vkCreateBuffer(m_device, &buffer_info, nullptr, &buffer) != VK_SUCCESS) {
     throw std::runtime_error {"failed to create vertex buffer!"};
   }
 
   VkMemoryRequirements memory_requirements;
-  vkGetBufferMemoryRequirements(
-      m_device, m_vertex_buffer, &memory_requirements);
+  vkGetBufferMemoryRequirements(m_device, buffer, &memory_requirements);
 
   VkMemoryAllocateInfo alloc_info = {
       .sType = VK_STRUCTURE_TYPE_MEMORY_ALLOCATE_INFO,
       .allocationSize = memory_requirements.size,
       .memoryTypeIndex =
-          find_memory_type(memory_requirements.memoryTypeBits,
-                           VK_MEMORY_PROPERTY_HOST_VISIBLE_BIT
-                               | VK_MEMORY_PROPERTY_HOST_COHERENT_BIT),
+          find_memory_type(memory_requirements.memoryTypeBits, properties),
   };
 
-  if (vkAllocateMemory(m_device, &alloc_info, nullptr, &m_vertex_buffer_memory)
+  VkDeviceMemory buffer_memory = nullptr;
+  if (vkAllocateMemory(m_device, &alloc_info, nullptr, &buffer_memory)
       != VK_SUCCESS)
   {
     throw std::runtime_error {"failed to allocate vertex buffer memory!"};
   }
 
-  vkBindBufferMemory(m_device, m_vertex_buffer, m_vertex_buffer_memory, 0);
-  void* data = nullptr;
-  vkMapMemory(m_device, m_vertex_buffer_memory, 0, buffer_info.size, 0, &data);
-  std::copy(vertices.begin(),
-            vertices.begin() + buffer_info.size,
-            static_cast<shaders::vertex*>(data));
-  vkUnmapMemory(m_device, m_vertex_buffer_memory);
+  vkBindBufferMemory(m_device, buffer, buffer_memory, 0);
+  return vulkan::buffer_and_memory {
+      .buffer = buffer,
+      .memory = buffer_memory,
+  };
 }
 
 VkShaderModule vktut::hello_triangle::application::create_shader_module(

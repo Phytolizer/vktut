@@ -9,6 +9,7 @@
 #include <GLFW/glfw3.h>
 
 #include <vktut/shaders/vertex.hxx>
+#include <vktut/vulkan/buffer_and_memory.hxx>
 #include <vktut/vulkan/instance.hxx>
 #include <vktut/vulkan/swap_chain_support_details.hxx>
 
@@ -25,6 +26,7 @@ private:
   VkQueue m_graphics_queue;
   VkSurfaceKHR m_surface;
   VkQueue m_present_queue;
+  VkQueue m_transfer_queue;
   VkSwapchainKHR m_swap_chain;
   std::vector<VkImage> m_swap_chain_images;
   VkFormat m_swap_chain_image_format;
@@ -35,7 +37,9 @@ private:
   VkPipeline m_graphics_pipeline;
   std::vector<VkFramebuffer> m_swap_chain_framebuffers;
   VkCommandPool m_command_pool;
+  VkCommandPool m_transfer_command_pool;
   std::vector<VkCommandBuffer> m_command_buffers;
+  std::vector<VkCommandBuffer> m_transfer_command_buffers;
   std::vector<VkSemaphore> m_image_available_semaphores;
   std::vector<VkSemaphore> m_render_finished_semaphores;
   std::vector<VkFence> m_in_flight_fences;
@@ -88,13 +92,16 @@ private:
   void cleanup();
   void create_graphics_pipeline();
   void create_vertex_buffer();
+  vulkan::buffer_and_memory create_buffer(VkDeviceSize size,
+                                          VkBufferUsageFlags usage,
+                                          VkMemoryPropertyFlags properties);
   VkShaderModule create_shader_module(const std::vector<char>& code);
   void setup_debug_messenger();
   void pick_physical_device();
   void create_logical_device();
   void create_surface();
   void create_framebuffers();
-  void create_command_pool();
+  void create_command_pools();
   void create_command_buffers();
   void create_sync_objects();
   void draw_frame();
@@ -105,7 +112,7 @@ private:
   int rate_device_suitability(VkPhysicalDevice device);
   VkExtent2D choose_swap_extent(const VkSurfaceCapabilitiesKHR& capabilities);
   std::uint32_t find_memory_type(std::uint32_t type_filter,
-                                        VkMemoryPropertyFlags properties);
+                                 VkMemoryPropertyFlags properties);
   static VkPresentModeKHR choose_swap_present_mode(
       const std::vector<VkPresentModeKHR>& available_present_modes);
   static VkSurfaceFormatKHR choose_swap_surface_format(

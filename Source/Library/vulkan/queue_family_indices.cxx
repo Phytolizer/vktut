@@ -33,10 +33,23 @@ vktut::vulkan::queue_family_indices vktut::vulkan::queue_family_indices::find(
     }
   }
 
+  auto transfer_family = std::find_if(
+      queue_families.begin(),
+      queue_families.end(),
+      [](const auto& queue_family)
+      {
+        return (queue_family.queueFlags & VK_QUEUE_TRANSFER_BIT) != 0
+            && (queue_family.queueFlags & VK_QUEUE_GRAPHICS_BIT) == 0;
+      });
+  if (transfer_family != queue_families.end()) {
+    indices.transfer_family = transfer_family - queue_families.begin();
+  }
+
   return indices;
 }
 
 bool vktut::vulkan::queue_family_indices::is_complete() const
 {
-  return graphics_family.has_value() && present_family.has_value();
+  return graphics_family.has_value() && present_family.has_value()
+      && transfer_family.has_value();
 }
