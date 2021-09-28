@@ -136,8 +136,9 @@ private:
   void create_texture_image_view();
   void create_texture_sampler();
   void create_depth_resources();
-  VkImageView create_image_view(
-    VkImage image, VkFormat format, VkImageAspectFlags aspect_flags);
+  VkImageView create_image_view(VkImage image,
+                                VkFormat format,
+                                VkImageAspectFlags aspect_flags);
   vulkan::image_and_memory create_image(std::uint32_t width,
                                         std::uint32_t height,
                                         VkFormat format,
