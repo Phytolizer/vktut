@@ -261,9 +261,23 @@ void vktut::hello_triangle::application::framebuffer_resize_callback(
 
 void vktut::hello_triangle::application::main_loop()
 {
+  auto program_start = std::chrono::high_resolution_clock::now();
+  std::size_t frame_count = 0;
   while (glfwWindowShouldClose(m_window) == 0) {
     glfwPollEvents();
     draw_frame();
+    ++frame_count;
+
+    auto current_time = std::chrono::high_resolution_clock::now();
+    if (std::chrono::duration<float, std::chrono::seconds::period>(
+            current_time - program_start)
+            .count()
+        > 1)
+    {
+      std::cout << "FPS: " << frame_count << "\n";
+      frame_count = 0;
+      program_start = current_time;
+    }
   }
 
   vkDeviceWaitIdle(m_device);
