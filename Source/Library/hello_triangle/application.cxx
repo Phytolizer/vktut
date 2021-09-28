@@ -700,9 +700,9 @@ void vktut::hello_triangle::application::create_swap_chain()
 void vktut::hello_triangle::application::create_graphics_pipeline()
 {
   auto vert_shader_code =
-      utilities::files::read_file("Resources/Shaders/vert.spv");
+      utilities::files::read_file("Resources/Shaders/basic.vert.spv");
   auto frag_shader_code =
-      utilities::files::read_file("Resources/Shaders/frag.spv");
+      utilities::files::read_file("Resources/Shaders/basic.frag.spv");
 
   VkShaderModule vert_shader_module = create_shader_module(vert_shader_code);
   VkShaderModule frag_shader_module = create_shader_module(frag_shader_code);
