@@ -40,6 +40,8 @@ vktut::hello_triangle::application::application()
     , m_transfer_command_pool(nullptr)
     , m_vertex_buffer(nullptr)
     , m_vertex_buffer_memory(nullptr)
+    , m_index_buffer(nullptr)
+    , m_index_buffer_memory(nullptr)
 {
   init_window();
   init_vulkan();
@@ -79,6 +81,7 @@ void vktut::hello_triangle::application::init_vulkan()
   create_framebuffers();
   create_command_pools();
   create_vertex_buffer();
+  create_index_buffer();
   create_command_buffers();
   create_sync_objects();
 }
@@ -221,6 +224,8 @@ void vktut::hello_triangle::application::cleanup()
 {
   cleanup_swap_chain();
 
+  vkDestroyBuffer(m_device, m_index_buffer, nullptr);
+  vkFreeMemory(m_device, m_index_buffer_memory, nullptr);
   vkDestroyBuffer(m_device, m_vertex_buffer, nullptr);
   vkFreeMemory(m_device, m_vertex_buffer_memory, nullptr);
 
@@ -476,7 +481,9 @@ void vktut::hello_triangle::application::create_command_buffers()
     };
     vkCmdBindVertexBuffers(
         m_command_buffers[i], 0, 1, vertex_buffers.data(), offsets.data());
-    vkCmdDraw(m_command_buffers[i], vertices.size(), 1, 0, 0);
+    vkCmdBindIndexBuffer(
+        m_command_buffers[i], m_index_buffer, 0, VK_INDEX_TYPE_UINT16);
+    vkCmdDrawIndexed(m_command_buffers[i], indices.size(), 1, 0, 0, 0);
     vkCmdEndRenderPass(m_command_buffers[i]);
     if (vkEndCommandBuffer(m_command_buffers[i]) != VK_SUCCESS) {
       throw std::runtime_error {"failed to record command buffer!"};
@@ -934,9 +941,8 @@ void vktut::hello_triangle::application::create_vertex_buffer()
   VkDeviceMemory staging_memory = staging_buffer_and_memory.memory;
   void* data = nullptr;
   vkMapMemory(m_device, staging_memory, 0, buffer_size, 0, &data);
-  std::copy(vertices.begin(),
-            vertices.begin() + buffer_size,
-            static_cast<shaders::vertex*>(data));
+  std::copy(
+      vertices.begin(), vertices.end(), static_cast<shaders::vertex*>(data));
   vkUnmapMemory(m_device, staging_memory);
 
   auto vertex_buffer_and_memory = create_buffer(
@@ -955,6 +961,38 @@ void vktut::hello_triangle::application::create_vertex_buffer()
 
   vkDestroyBuffer(m_device, staging_buffer, nullptr);
   vkFreeMemory(m_device, staging_memory, nullptr);
+}
+
+void vktut::hello_triangle::application::create_index_buffer()
+{
+  VkDeviceSize buffer_size =
+      sizeof(decltype(indices)::value_type) * indices.size();
+
+  auto staging = create_buffer(buffer_size,
+                               VK_BUFFER_USAGE_TRANSFER_SRC_BIT,
+                               VK_MEMORY_PROPERTY_HOST_VISIBLE_BIT
+                                   | VK_MEMORY_PROPERTY_HOST_COHERENT_BIT);
+
+  void* data = nullptr;
+  vkMapMemory(m_device, staging.memory, 0, buffer_size, 0, &data);
+  std::copy(indices.begin(), indices.end(), static_cast<std::uint16_t*>(data));
+  vkUnmapMemory(m_device, staging.memory);
+
+  auto index = create_buffer(
+      buffer_size,
+      VK_BUFFER_USAGE_TRANSFER_DST_BIT | VK_BUFFER_USAGE_INDEX_BUFFER_BIT,
+      VK_MEMORY_PROPERTY_DEVICE_LOCAL_BIT);
+  m_index_buffer = index.buffer;
+  m_index_buffer_memory = index.memory;
+  vulkan::buffer_utilities::copy_buffer(staging.buffer,
+                                        index.buffer,
+                                        buffer_size,
+                                        m_transfer_queue,
+                                        m_device,
+                                        m_transfer_command_pool);
+
+  vkDestroyBuffer(m_device, staging.buffer, nullptr);
+  vkFreeMemory(m_device, staging.memory, nullptr);
 }
 
 vktut::vulkan::buffer_and_memory
