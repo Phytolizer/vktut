@@ -9,17 +9,19 @@ project(
 
 set(CMAKE_EXPORT_COMPILE_COMMANDS ON)
 
+set(CMAKE_MODULE_PATH "${CMAKE_MODULE_PATH}" "${PROJECT_SOURCE_DIR}/cmake")
+
 include(cmake/cppcheck.cmake)
 include(cmake/clang_format.cmake)
 
 find_package(Vulkan REQUIRED)
 find_package(glfw3 REQUIRED)
+find_package(GLM REQUIRED)
+message(STATUS "Found GLFW: ${GLFW3_INCLUDE_DIRS}")
 
 configure_file(cmake/config.hpp.cin "${PROJECT_BINARY_DIR}/config.hpp")
 
-if(UNIX)
-  set(GLSL_VALIDATOR "glslc")
-endif()
+find_program(GLSL_VALIDATOR glslc REQUIRED HINTS "$ENV{VULKAN_SDK}/Bin")
 
 file(GLOB_RECURSE GLSL_SOURCE_FILES CONFIGURE_DEPENDS
      "Resources/Shaders/*.vert" "Resources/Shaders/*.frag"
@@ -45,10 +47,11 @@ add_custom_target(vktut_shaders DEPENDS ${SPIRV_OUTPUT_FILES})
 file(GLOB_RECURSE SOURCES CONFIGURE_DEPENDS "Source/Library/*.cxx")
 add_library(vktut_lib OBJECT ${SOURCES})
 target_include_directories(
-  vktut_lib PUBLIC "${PROJECT_SOURCE_DIR}/Include" "${PROJECT_BINARY_DIR}"
+	vktut_lib PUBLIC "${PROJECT_SOURCE_DIR}/Include" "${PROJECT_BINARY_DIR}" "${GLFW3_INCLUDE_DIRS}" "${GLM_INCLUDE_DIRS}"
 )
 target_compile_features(vktut_lib PUBLIC cxx_std_20)
-target_link_libraries(vktut_lib PUBLIC Vulkan::Vulkan glfw)
+target_link_libraries(vktut_lib PUBLIC "${GLFW3_LIBRARIES}")
+target_link_libraries(vktut_lib PUBLIC Vulkan::Vulkan)
 add_dependencies(vktut_lib vktut_shaders)
 
 file(GLOB_RECURSE SOURCES CONFIGURE_DEPENDS "Source/Executable/*.cxx")

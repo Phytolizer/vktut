@@ -1,6 +1,6 @@
 include("${PROJECT_SOURCE_DIR}/cmake/enumerate_all_sources.cmake")
 
-find_program(CPPCHECK cppcheck HINTS ENV PATH REQUIRED)
+find_program(CPPCHECK cppcheck cppcheck.exe HINTS ENV PATH "C:/Program Files/Cppcheck" REQUIRED)
 
 message(STATUS "cppcheck found: ${CPPCHECK}")
 add_custom_target(
