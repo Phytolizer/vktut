@@ -17,7 +17,6 @@ include(cmake/clang_format.cmake)
 find_package(Vulkan REQUIRED)
 find_package(glfw3 REQUIRED)
 find_package(GLM REQUIRED)
-message(STATUS "Found GLFW: ${GLFW3_INCLUDE_DIRS}")
 
 configure_file(cmake/config.hpp.cin "${PROJECT_BINARY_DIR}/config.hpp")
 

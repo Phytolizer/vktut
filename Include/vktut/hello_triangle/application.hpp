@@ -8,7 +8,6 @@
 #define GLFW_INCLUDE_VULKAN
 #include <GLFW/glfw3.h>
 #include <config.hpp>
-
 #include <vktut/shaders/vertex.hpp>
 #include <vktut/vulkan/buffer_and_memory.hpp>
 #include <vktut/vulkan/image_and_memory.hpp>
@@ -130,15 +129,14 @@ private:
                                 VkFormat format,
                                 VkImageAspectFlags aspect_flags,
                                 std::uint32_t mip_levels);
-  vktut::vulkan::image_and_memory create_image(
-      std::uint32_t width,
-      std::uint32_t height,
-      std::uint32_t mip_levels,
-      VkSampleCountFlagBits num_samples,
-      VkFormat format,
-      VkImageTiling tiling,
-      VkImageUsageFlags usage,
-      VkMemoryPropertyFlags properties);
+  vulkan::image_and_memory create_image(std::uint32_t width,
+                                        std::uint32_t height,
+                                        std::uint32_t mip_levels,
+                                        VkSampleCountFlagBits num_samples,
+                                        VkFormat format,
+                                        VkImageTiling tiling,
+                                        VkImageUsageFlags usage,
+                                        VkMemoryPropertyFlags properties);
   vulkan::buffer_and_memory create_buffer(VkDeviceSize size,
                                           VkBufferUsageFlags usage,
                                           VkMemoryPropertyFlags properties);
