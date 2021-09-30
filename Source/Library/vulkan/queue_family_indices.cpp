@@ -1,7 +1,7 @@
 #include <algorithm>
 #include <vector>
 
-#include "vktut/vulkan/queue_family_indices.hxx"
+#include "vktut/vulkan/queue_family_indices.hpp"
 
 vktut::vulkan::queue_family_indices vktut::vulkan::queue_family_indices::find(
     VkPhysicalDevice device, VkSurfaceKHR surface)

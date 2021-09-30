@@ -5,7 +5,7 @@
 #include <string_view>
 #include <vector>
 
-#include "vktut/vulkan/instance.hxx"
+#include "vktut/vulkan/instance.hpp"
 
 vktut::vulkan::instance::~instance()
 {

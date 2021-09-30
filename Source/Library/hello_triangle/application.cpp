@@ -7,23 +7,22 @@
 #include <unordered_set>
 #include <vector>
 
-#include "vktut/hello_triangle/application.hxx"
+#include "vktut/hello_triangle/application.hpp"
 
 #include <GLFW/glfw3.h>
 #include <config.hpp>
-#include <stb_image.h>
-#include <tiny_obj_loader.h>
 
 #define GLM_FORCE_RADIANS
 #define GLM_FORCE_DEFAULT_ALIGNED_GENTYPES
 #define GLM_FORCE_DEPTH_ZERO_TO_ONE
 #include <glm/glm.hpp>
 #include <glm/gtc/matrix_transform.hpp>
-
-#include <vktut/shaders/uniform_buffer_object.hxx>
-#include <vktut/utilities/files.hxx>
-#include <vktut/vulkan/debug.hxx>
-#include <vktut/vulkan/queue_family_indices.hxx>
+#include <stb_image.h>
+#include <tiny_obj_loader.h>
+#include <vktut/shaders/uniform_buffer_object.hpp>
+#include <vktut/utilities/files.hpp>
+#include <vktut/vulkan/debug.hpp>
+#include <vktut/vulkan/queue_family_indices.hpp>
 
 void vktut::hello_triangle::application::run()
 {

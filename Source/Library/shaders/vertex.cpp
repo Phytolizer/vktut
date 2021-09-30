@@ -1,4 +1,4 @@
-#include "vktut/shaders/vertex.hxx"
+#include "vktut/shaders/vertex.hpp"
 
 bool vktut::shaders::vertex::operator==(const vertex& other) const
 {

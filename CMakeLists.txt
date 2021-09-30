@@ -44,7 +44,7 @@ endforeach()
 
 add_custom_target(vktut_shaders DEPENDS ${SPIRV_OUTPUT_FILES})
 
-file(GLOB_RECURSE SOURCES CONFIGURE_DEPENDS "Source/Library/*.cxx")
+file(GLOB_RECURSE SOURCES CONFIGURE_DEPENDS "Source/Library/*.cpp")
 add_library(vktut_lib OBJECT ${SOURCES})
 target_include_directories(
 	vktut_lib PUBLIC "${PROJECT_SOURCE_DIR}/Include" "${PROJECT_BINARY_DIR}" "${GLFW3_INCLUDE_DIRS}" "${GLM_INCLUDE_DIRS}"
@@ -54,7 +54,7 @@ target_link_libraries(vktut_lib PUBLIC "${GLFW3_LIBRARIES}")
 target_link_libraries(vktut_lib PUBLIC Vulkan::Vulkan)
 add_dependencies(vktut_lib vktut_shaders)
 
-file(GLOB_RECURSE SOURCES CONFIGURE_DEPENDS "Source/Executable/*.cxx")
+file(GLOB_RECURSE SOURCES CONFIGURE_DEPENDS "Source/Executable/*.cpp")
 add_executable(vktut_exe ${SOURCES})
 target_link_libraries(vktut_exe PRIVATE vktut_lib)
 set_target_properties(vktut_exe PROPERTIES OUTPUT_NAME vktut)

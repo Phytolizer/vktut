@@ -1,4 +1,4 @@
-#include "vktut/vulkan/debug.hxx"
+#include "vktut/vulkan/debug.hpp"
 
 VkResult vktut::vulkan::debug::create_debug_utils_messenger_ext(
     instance* instance,

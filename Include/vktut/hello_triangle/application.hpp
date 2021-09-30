@@ -9,11 +9,11 @@
 #include <GLFW/glfw3.h>
 #include <config.hpp>
 
-#include <vktut/shaders/vertex.hxx>
-#include <vktut/vulkan/buffer_and_memory.hxx>
-#include <vktut/vulkan/image_and_memory.hxx>
-#include <vktut/vulkan/instance.hxx>
-#include <vktut/vulkan/swap_chain_support_details.hxx>
+#include <vktut/shaders/vertex.hpp>
+#include <vktut/vulkan/buffer_and_memory.hpp>
+#include <vktut/vulkan/image_and_memory.hpp>
+#include <vktut/vulkan/instance.hpp>
+#include <vktut/vulkan/swap_chain_support_details.hpp>
 
 namespace vktut::hello_triangle
 {

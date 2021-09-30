@@ -1,4 +1,4 @@
-#include <vktut/hello_triangle/application.hxx>
+#include <vktut/hello_triangle/application.hpp>
 
 int main()
 {

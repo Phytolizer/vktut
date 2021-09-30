@@ -2,7 +2,7 @@
 #include <stdexcept>
 #include <string>
 
-#include "vktut/utilities/files.hxx"
+#include "vktut/utilities/files.hpp"
 
 std::vector<char> vktut::utilities::files::read_file(std::string_view file_name)
 {
