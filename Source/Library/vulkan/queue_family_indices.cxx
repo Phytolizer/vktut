@@ -22,7 +22,8 @@ vktut::vulkan::queue_family_indices vktut::vulkan::queue_family_indices::find(
                    [](const auto& queue_family)
                    { return queue_family.queueFlags & VK_QUEUE_GRAPHICS_BIT; });
   if (graphics_family != queue_families.end()) {
-    indices.graphics_family = graphics_family - queue_families.begin();
+    indices.graphics_family =
+        static_cast<std::uint32_t>(graphics_family - queue_families.begin());
   }
 
   for (std::uint32_t i = 0; i < queue_families.size(); ++i) {
@@ -42,7 +43,8 @@ vktut::vulkan::queue_family_indices vktut::vulkan::queue_family_indices::find(
             && (queue_family.queueFlags & VK_QUEUE_GRAPHICS_BIT) == 0;
       });
   if (transfer_family != queue_families.end()) {
-    indices.transfer_family = transfer_family - queue_families.begin();
+    indices.transfer_family =
+        static_cast<std::uint32_t>(transfer_family - queue_families.begin());
   }
 
   return indices;

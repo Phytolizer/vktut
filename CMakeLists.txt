@@ -57,6 +57,7 @@ add_dependencies(vktut_lib vktut_shaders)
 file(GLOB_RECURSE SOURCES CONFIGURE_DEPENDS "Source/Executable/*.cxx")
 add_executable(vktut_exe ${SOURCES})
 target_link_libraries(vktut_exe PRIVATE vktut_lib)
+set_target_properties(vktut_exe PROPERTIES OUTPUT_NAME vktut)
 
 add_custom_command(
   TARGET vktut_exe

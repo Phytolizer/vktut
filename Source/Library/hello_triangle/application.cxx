@@ -339,30 +339,22 @@ void vktut::hello_triangle::application::load_model()
 
   for (const auto& shape : shapes) {
     for (const auto& index : shape.mesh.indices) {
-      auto vert = shaders::vertex {
-          .pos =
-              {
-                  attrib
-                      .vertices[3 * static_cast<std::size_t>(index.vertex_index)
-                                + 0],
-                  attrib
-                      .vertices[3 * static_cast<std::size_t>(index.vertex_index)
-                                + 1],
-                  attrib
-                      .vertices[3 * static_cast<std::size_t>(index.vertex_index)
-                                + 2],
-              },
-          .color = {1, 1, 1},
-          .tex_coord =
-              {
-                  attrib.texcoords
-                      [2 * static_cast<std::size_t>(index.texcoord_index) + 0],
-                  1.0F
-                      - attrib.texcoords
-                            [2 * static_cast<std::size_t>(index.texcoord_index)
-                             + 1],
-              },
+      auto vert = shaders::vertex {};
+      vert.pos = {
+          attrib.vertices[3 * static_cast<std::size_t>(index.vertex_index) + 0],
+          attrib.vertices[3 * static_cast<std::size_t>(index.vertex_index) + 1],
+          attrib.vertices[3 * static_cast<std::size_t>(index.vertex_index) + 2],
       };
+      vert.color = {1, 1, 1};
+      if (index.texcoord_index != -1) {
+        vert.tex_coord = {
+            attrib.texcoords[2 * static_cast<std::size_t>(index.texcoord_index)
+                             + 0],
+            1.0F
+                - attrib.texcoords
+                      [2 * static_cast<std::size_t>(index.texcoord_index) + 1],
+        };
+      }
 
       if (unique_vertices.count(vert) == 0) {
         unique_vertices.emplace(vert,
