@@ -79,10 +79,10 @@ private:
       PROJECT_SOURCE_DIR "/Resources/Textures/tex_0.jpg",
       PROJECT_SOURCE_DIR "/Resources/Textures/tex_1.jpg",
   };
-  static constexpr std::array validation_layers = {
+  static constexpr std::array<const char*, 1> validation_layers = {
       "VK_LAYER_KHRONOS_validation",
   };
-  static constexpr std::array device_extensions = {
+  static constexpr std::array<const char*, 1> device_extensions = {
       VK_KHR_SWAPCHAIN_EXTENSION_NAME,
   };
   static constexpr int max_frames_in_flight = 2;
