@@ -1,10 +1,11 @@
 cmake_minimum_required(VERSION 3.12...3.21 FATAL_ERROR)
 
 project(
-  vktut
-  LANGUAGES CXX
+  vkguide
+  LANGUAGES C CXX
   VERSION 0.1.0
-  DESCRIPTION "Learning Vulkan from the official tutorial"
+  DESCRIPTION "Learning Vulkan from VkGuide"
+  HOMEPAGE_URL "https://vkguide.dev/"
 )
 
 set(CMAKE_EXPORT_COMPILE_COMMANDS ON)
@@ -15,56 +16,38 @@ include(cmake/cppcheck.cmake)
 include(cmake/clang_format.cmake)
 
 find_package(Vulkan REQUIRED)
-find_package(glfw3 REQUIRED)
-find_package(GLM REQUIRED)
 
 configure_file(cmake/config.hpp.cin "${PROJECT_BINARY_DIR}/config.hpp")
 
-find_program(GLSL_VALIDATOR glslc REQUIRED HINTS "$ENV{VULKAN_SDK}/Bin")
-
-file(GLOB_RECURSE GLSL_SOURCE_FILES CONFIGURE_DEPENDS
-     "Resources/Shaders/*.vert" "Resources/Shaders/*.frag"
-)
-
-foreach(GLSL_SOURCE_FILE ${GLSL_SOURCE_FILES})
-  get_filename_component(FILE_NAME ${GLSL_SOURCE_FILE} NAME)
-  set(SPIRV_OUTPUT_FILE
-      "${PROJECT_BINARY_DIR}/Resources/Shaders/${FILE_NAME}.spv"
-  )
+message("PROJECT SOURCE DIR: ${PROJECT_SOURCE_DIR}")
+file(GLOB GLSL_SOURCE_FILES CONFIGURE_DEPENDS "${PROJECT_SOURCE_DIR}/shaders/*.glsl")
+message("GLSL SOURCE FILES: ${GLSL_SOURCE_FILES}")
+foreach(GLSL ${GLSL_SOURCE_FILES})
+  get_filename_component(FILE_NAME "${GLSL}" NAME_WLE)
+  get_filename_component(SHADER_STAGE "${FILE_NAME}" LAST_EXT)
+  string(REPLACE "." "" SHADER_STAGE "${SHADER_STAGE}")
+  set(SPIRV "${CMAKE_BINARY_DIR}/shaders/${FILE_NAME}.spv")
+  message("BUILDING SHADER ${FILE_NAME} (${SHADER_STAGE}) ==> ${SPIRV}")
   add_custom_command(
-    OUTPUT ${SPIRV_OUTPUT_FILE}
-    COMMAND ${CMAKE_COMMAND} -E make_directory
-            "${PROJECT_BINARY_DIR}/Resources/Shaders"
-    COMMAND ${GLSL_VALIDATOR} ${GLSL_SOURCE_FILE} -o ${SPIRV_OUTPUT_FILE}
-    DEPENDS ${GLSL_SOURCE_FILE}
+    OUTPUT "${SPIRV}"
+    COMMAND "${CMAKE_COMMAND}" -E make_directory "${CMAKE_BINARY_DIR}/shaders"
+    COMMAND "${Vulkan_GLSLC_EXECUTABLE}" -fshader-stage="${SHADER_STAGE}"
+            "${GLSL}" -o "${SPIRV}"
+    DEPENDS "${GLSL}"
   )
-  list(APPEND SPIRV_OUTPUT_FILES ${SPIRV_OUTPUT_FILE})
+  list(APPEND SPIRV_BINARY_FILES "${SPIRV}")
 endforeach()
 
-add_custom_target(vktut_shaders DEPENDS ${SPIRV_OUTPUT_FILES})
+add_custom_target(shaders DEPENDS "${SPIRV_BINARY_FILES}")
 
-file(GLOB_RECURSE SOURCES CONFIGURE_DEPENDS "Source/Library/*.cpp")
-add_library(vktut_lib OBJECT ${SOURCES})
-target_include_directories(
-	vktut_lib PUBLIC "${PROJECT_SOURCE_DIR}/Include" "${PROJECT_BINARY_DIR}" "${GLFW3_INCLUDE_DIRS}" "${GLM_INCLUDE_DIRS}"
-)
-target_compile_features(vktut_lib PUBLIC cxx_std_20)
-target_link_libraries(vktut_lib PUBLIC "${GLFW3_LIBRARIES}")
-target_link_libraries(vktut_lib PUBLIC Vulkan::Vulkan)
-add_dependencies(vktut_lib vktut_shaders)
+set(LIBC ON CACHE BOOL "Use libc")
 
-file(GLOB_RECURSE SOURCES CONFIGURE_DEPENDS "Source/Executable/*.cpp")
-add_executable(vktut_exe ${SOURCES})
-target_link_libraries(vktut_exe PRIVATE vktut_lib)
-set_target_properties(vktut_exe PROPERTIES OUTPUT_NAME vktut)
+add_subdirectory("third-party/glm")
+add_subdirectory("third-party/SDL2-2.0.16")
+add_subdirectory("third-party/imgui-1.84.2")
+add_subdirectory("third-party/stb-master")
+add_subdirectory("third-party/tiny_obj_loader")
+add_subdirectory("third-party/vk-bootstrap-0.4")
+add_subdirectory("third-party/VulkanMemoryAllocator-master")
 
-add_custom_command(
-  TARGET vktut_exe
-  POST_BUILD
-  COMMAND ${CMAKE_COMMAND} -E make_directory
-          "$<TARGET_FILE_DIR:vktut_exe>/Resources/Shaders"
-  COMMAND
-    ${CMAKE_COMMAND} -E copy_directory
-    "${PROJECT_BINARY_DIR}/Resources/Shaders"
-    "$<TARGET_FILE_DIR:vktut_exe>/Resources/Shaders"
-)
+add_subdirectory("chapter-0")
